@@ -1,0 +1,19 @@
+[Unit]
+Description=Hotel Sensor Alert Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+WorkingDirectory=@PROJECT_ROOT@
+ExecStart=@PROJECT_ROOT@/scripts/run_daemon.sh @CONFIG_FILE@
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=@ALERT_DIRECTORY@
+
+[Install]
+WantedBy=multi-user.target
