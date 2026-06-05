@@ -1,15 +1,18 @@
+#include <chrono>
+#include <cctype>
+#include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <cctype>
 
 #include <sqlite3.h>
 
+#include "cache.h"
 #include "http_client.h"
 #include "mongoose.h"
-#include "cache.h"
 
 namespace {
 
@@ -27,7 +30,10 @@ struct Config {
     int slave1_port = 0;
     int slave2_port = 0;
     int slave_timeout_ms = 3000;
-    int cache_ttl = 300;
+
+    std::string memcached_host;
+    int memcached_port = 0;
+    int cache_ttl_seconds = 0;
 };
 
 struct SensorReading {
@@ -53,7 +59,7 @@ enum class SlaveQueryStatus {
 };
 
 Config g_config;
-bool g_cache_available = true;
+bool g_cache_available = false;
 
 std::string trim(const std::string &text) {
     const std::size_t first = text.find_first_not_of(" \t\r\n");
@@ -235,6 +241,21 @@ bool load_config(
 
                 return false;
             }
+        } else if (key == "MEMCACHED_HOST") {
+            config.memcached_host = value;
+        } else if (key == "MEMCACHED_PORT") {
+            if (!parse_port(value, config.memcached_port)) {
+                std::cerr << "Invalid MEMCACHED_PORT value\n";
+                return false;
+            }
+        } else if (key == "CACHE_TTL") {
+            if (!parse_positive_integer(
+                    value,
+                    config.cache_ttl_seconds
+                )) {
+                std::cerr << "Invalid CACHE_TTL value\n";
+                return false;
+            }
         }
     }
 
@@ -274,6 +295,21 @@ bool load_config(
         config.slave2_port == 0
     ) {
         std::cerr << "Slave port configuration is missing\n";
+        return false;
+    }
+
+    if (config.memcached_host.empty()) {
+        std::cerr << "MEMCACHED_HOST is missing\n";
+        return false;
+    }
+
+    if (config.memcached_port == 0) {
+        std::cerr << "MEMCACHED_PORT is missing\n";
+        return false;
+    }
+
+    if (config.cache_ttl_seconds <= 0) {
+        std::cerr << "CACHE_TTL is missing\n";
         return false;
     }
 
@@ -424,68 +460,165 @@ std::string reading_to_json(
 }
 
 
-
-std::string extract_slave_data_json(
-    const std::string &slave_response
-) {
-    const std::string key = "\"data\":";
-
-    const std::size_t start = slave_response.find(key);
-
-    if (start == std::string::npos) {
-        return slave_response;
-    }
-
-    std::size_t json_start = start + key.size();
-
-    while (json_start < slave_response.size() &&
-           std::isspace(
-               static_cast<unsigned char>(slave_response[json_start])
-           )) {
-        json_start++;
-    }
-
-    if (json_start >= slave_response.size()) {
-        return slave_response;
-    }
-
-    int depth = 0;
-    bool started = false;
-
-    for (std::size_t i = json_start; i < slave_response.size(); i++) {
-
-        if (slave_response[i] == '{') {
-            depth++;
-            started = true;
-        }
-        else if (slave_response[i] == '}') {
-            depth--;
-
-            if (started && depth == 0) {
-                return slave_response.substr(
-                    json_start,
-                    i - json_start + 1
-                );
-            }
-        }
-    }
-
-    return slave_response;
-}
-
 std::string make_cache_key(
     const std::string &sensor_type,
     const std::string &sensor_id
 ) {
     std::string normalized_type = sensor_type;
 
-    for (char &c : normalized_type) {
-        c = static_cast<char>(
-            std::tolower(static_cast<unsigned char>(c))
+    for (char &character : normalized_type) {
+        character = static_cast<char>(
+            std::tolower(
+                static_cast<unsigned char>(character)
+            )
         );
     }
 
-    return "sensor:" + normalized_type + ":" + sensor_id;
+    return
+        "sensor:" +
+        normalized_type +
+        ":" +
+        sensor_id;
+}
+
+long long elapsed_microseconds(
+    const std::chrono::steady_clock::time_point &start_time
+) {
+    return std::chrono::duration_cast<
+        std::chrono::microseconds
+    >(
+        std::chrono::steady_clock::now() - start_time
+    ).count();
+}
+
+void send_sensor_response(
+    struct mg_connection *connection,
+    const char *source,
+    long long response_time_us,
+    const std::string &sensor_json
+) {
+    mg_http_reply(
+        connection,
+        200,
+        "Content-Type: application/json\r\n",
+        "{\"source\":\"%s\"," 
+        "\"response_time_us\":%lld,"
+        "\"data\":%s}\n",
+        source,
+        response_time_us,
+        sensor_json.c_str()
+    );
+}
+
+bool extract_sensor_data_json(
+    const std::string &slave_response,
+    std::string &sensor_json
+) {
+    sensor_json.clear();
+
+    const std::string key = "\"data\"";
+    std::size_t key_position = slave_response.find(key);
+
+    if (key_position == std::string::npos) {
+        return false;
+    }
+
+    std::size_t colon_position = slave_response.find(
+        ':',
+        key_position + key.size()
+    );
+
+    if (colon_position == std::string::npos) {
+        return false;
+    }
+
+    std::size_t object_start = colon_position + 1;
+
+    while (
+        object_start < slave_response.size() &&
+        std::isspace(
+            static_cast<unsigned char>(
+                slave_response[object_start]
+            )
+        )
+    ) {
+        ++object_start;
+    }
+
+    if (
+        object_start >= slave_response.size() ||
+        slave_response[object_start] != '{'
+    ) {
+        return false;
+    }
+
+    int brace_depth = 0;
+    bool inside_string = false;
+    bool escaped = false;
+
+    for (
+        std::size_t index = object_start;
+        index < slave_response.size();
+        ++index
+    ) {
+        const char character = slave_response[index];
+
+        if (inside_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (character == '\\') {
+                escaped = true;
+            } else if (character == '"') {
+                inside_string = false;
+            }
+
+            continue;
+        }
+
+        if (character == '"') {
+            inside_string = true;
+        } else if (character == '{') {
+            ++brace_depth;
+        } else if (character == '}') {
+            --brace_depth;
+
+            if (brace_depth == 0) {
+                sensor_json = slave_response.substr(
+                    object_start,
+                    index - object_start + 1
+                );
+
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+void store_in_master_cache(
+    const std::string &cache_key,
+    const std::string &sensor_json
+) {
+    if (!g_cache_available) {
+        return;
+    }
+
+    std::string cache_error;
+
+    if (!cache_set(
+            cache_key,
+            sensor_json,
+            static_cast<std::time_t>(
+                g_config.cache_ttl_seconds
+            ),
+            cache_error
+        )) {
+        std::cerr
+            << "Memcached write error: "
+            << cache_error
+            << '\n';
+    }
 }
 
 SlaveQueryStatus query_slave(
@@ -566,6 +699,9 @@ void request_handler(
         return;
     }
 
+    const auto request_start =
+        std::chrono::steady_clock::now();
+
     auto *request =
         static_cast<struct mg_http_message *>(event_data);
 
@@ -631,28 +767,26 @@ void request_handler(
     }
 
     const std::string cache_key =
-    make_cache_key(sensor_type, sensor_id);
+        make_cache_key(sensor_type, sensor_id);
 
+    // The Master cache is always checked before the local SQLite
+    // database and before either Slave is contacted.
     if (g_cache_available) {
-
-        std::string cached_reading_json;
+        std::string cached_sensor_json;
         std::string cache_error;
 
-        const CacheGetStatus cache_status =
-            cache_get(
-                cache_key,
-                cached_reading_json,
-                cache_error
-            );
+        const CacheGetStatus cache_status = cache_get(
+            cache_key,
+            cached_sensor_json,
+            cache_error
+        );
 
         if (cache_status == CacheGetStatus::Hit) {
-
-            mg_http_reply(
+            send_sensor_response(
                 connection,
-                200,
-                "Content-Type: application/json\r\n",
-                "{\"source\":\"cache\",\"data\":%s}\n",
-                cached_reading_json.c_str()
+                "cache",
+                elapsed_microseconds(request_start),
+                cached_sensor_json
             );
 
             return;
@@ -680,30 +814,16 @@ void request_handler(
     bool distributed_query_incomplete = false;
 
     if (local_status == QueryStatus::Found) {
+        const std::string sensor_json =
+            reading_to_json(local_reading);
 
-    const std::string data =
-        reading_to_json(local_reading);
+        store_in_master_cache(cache_key, sensor_json);
 
-
-    if (g_cache_available) {
-
-        std::string cache_error;
-
-        cache_set(
-            cache_key,
-            data,
-            g_config.cache_ttl,
-            cache_error
-        );
-    }
-
-
-    mg_http_reply(
+        send_sensor_response(
             connection,
-            200,
-            "Content-Type: application/json\r\n",
-            "{\"source\":\"master\",\"data\":%s}\n",
-            data.c_str()
+            "master",
+            elapsed_microseconds(request_start),
+            sensor_json
         );
 
         return;
@@ -731,29 +851,28 @@ void request_handler(
     );
 
     if (slave_status == SlaveQueryStatus::Found) {
-        if (g_cache_available) {
+        std::string sensor_json;
 
-            std::string cache_error;
+        if (!extract_sensor_data_json(
+                slave_response,
+                sensor_json
+            )) {
+            std::cerr
+                << "Could not extract sensor data from Slave1 response\n";
 
-            const std::string cache_data =
-                extract_slave_data_json(slave_response);
+            distributed_query_incomplete = true;
+        } else {
+            store_in_master_cache(cache_key, sensor_json);
 
-            cache_set(
-                cache_key,
-                cache_data,
-                g_config.cache_ttl,
-                cache_error
+            send_sensor_response(
+                connection,
+                "slave1",
+                elapsed_microseconds(request_start),
+                sensor_json
             );
-        }
-        mg_http_reply(
-            connection,
-            200,
-            "Content-Type: application/json\r\n",
-            "{\"source\":\"slave1\",\"data\":%s}\n",
-            slave_response.c_str()
-        );
 
-        return;
+            return;
+        }
     }
 
     if (slave_status == SlaveQueryStatus::Error) {
@@ -773,15 +892,28 @@ void request_handler(
     );
 
     if (slave_status == SlaveQueryStatus::Found) {
-        mg_http_reply(
-            connection,
-            200,
-            "Content-Type: application/json\r\n",
-            "{\"source\":\"slave2\",\"data\":%s}\n",
-            slave_response.c_str()
-        );
+        std::string sensor_json;
 
-        return;
+        if (!extract_sensor_data_json(
+                slave_response,
+                sensor_json
+            )) {
+            std::cerr
+                << "Could not extract sensor data from Slave2 response\n";
+
+            distributed_query_incomplete = true;
+        } else {
+            store_in_master_cache(cache_key, sensor_json);
+
+            send_sensor_response(
+                connection,
+                "slave2",
+                elapsed_microseconds(request_start),
+                sensor_json
+            );
+
+            return;
+        }
     }
 
     if (slave_status == SlaveQueryStatus::Error) {
@@ -815,6 +947,23 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
+    std::string cache_error;
+
+    g_cache_available = cache_init(
+        g_config.memcached_host,
+        static_cast<std::uint16_t>(
+            g_config.memcached_port
+        ),
+        cache_error
+    );
+
+    if (!g_cache_available) {
+        std::cerr
+            << "Memcached initialization failed: "
+            << cache_error
+            << " -- continuing without Master cache\n";
+    }
+
     struct mg_mgr manager;
     mg_mgr_init(&manager);
 
@@ -836,6 +985,7 @@ int main(int argc, char *argv[]) {
             << '\n';
 
         mg_mgr_free(&manager);
+        cache_shutdown();
         return EXIT_FAILURE;
     }
 
@@ -844,19 +994,32 @@ int main(int argc, char *argv[]) {
         << g_config.port
         << ", database: "
         << g_config.database_path
+        << ", cache: "
+        << (g_cache_available ? "enabled" : "disabled")
         << '\n';
+
+    if (g_cache_available) {
+        std::cout
+            << "Master Memcached: "
+            << g_config.memcached_host
+            << ':'
+            << g_config.memcached_port
+            << ", TTL: "
+            << g_config.cache_ttl_seconds
+            << " seconds\n";
+    }
 
     std::cout
         << "Slave1: "
         << g_config.slave1_ip
-        << ":"
+        << ':'
         << g_config.slave1_port
         << '\n';
 
     std::cout
         << "Slave2: "
         << g_config.slave2_ip
-        << ":"
+        << ':'
         << g_config.slave2_port
         << '\n';
 
@@ -865,5 +1028,6 @@ int main(int argc, char *argv[]) {
     }
 
     mg_mgr_free(&manager);
+    cache_shutdown();
     return EXIT_SUCCESS;
 }

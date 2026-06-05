@@ -1,39 +1,26 @@
-# Section 01 — Basic Distributed Database System
+# Distributed Sensor Database System — Section 2: Caching Layer
 
-## Embedded Systems — Homework 04
+## Overview
 
-This section implements a basic distributed sensor database using one **Master** node and two **Slave** nodes. Each node stores its own sensor data in a local SQLite database. The operator sends requests only to the Master. The Master checks its local database first and, if the requested sensor reading is not found, queries Slave1 and then Slave2 through HTTP.
+This section extends the distributed sensor database system developed in Section 1 by adding an in-memory cache based on Memcached. The system contains one Master node and two Slave nodes. Each node has its own SQLite database and its own local Memcached service.
 
-The programs are written in C++17, use Mongoose for HTTP communication, and use SQLite for local storage.
+The operator sends all requests to the Master node. For each request, the Master first checks its local cache. If the requested sensor reading is found, the response is returned immediately. If the value is not available in the cache, the Master checks its local SQLite database. If the reading does not belong to the Master, the request is forwarded to Slave1 and then to Slave2. After a successful lookup, the returned sensor data is stored in the Master cache so that later requests can be answered without accessing SQLite or contacting another node.
 
----
+The virtual machines are managed through SSH. Application-level communication is performed using HTTP over the configured IP addresses and ports.
 
-## 1. Implemented Architecture
+## Network Configuration
 
-The system contains the following nodes:
+| Node | IP Address | HTTP Port |
+|---|---:|---:|
+| Master | `192.168.122.22` | `8000` |
+| Slave1 | `192.168.122.18` | `9001` |
+| Slave2 | `192.168.122.190` | `9002` |
 
-- **Master**: receives operator requests, checks `master.db`, queries the Slave nodes when necessary, and returns the final response.
-- **Slave1**: checks `slave1.db` and returns a local result to the Master.
-- **Slave2**: checks `slave2.db` and returns a local result to the Master.
-
-The API endpoint is:
-
-```text
-GET /api/sensor?id=<sensor_id>&type=<sensor_type>
-```
-
-Example:
+## Project Structure
 
 ```text
-GET /api/sensor?id=101&type=temperature
-```
-
----
-
-## 2. Project Structure
-
-```text
-01/
+02/
+├── cache_speed_result.csv
 ├── data/
 │   ├── master_sensors.csv
 │   ├── slave1_sensors.csv
@@ -43,740 +30,531 @@ GET /api/sensor?id=101&type=temperature
 │   ├── slave1.log
 │   └── slave2.log
 ├── master/
+│   ├── cache.cpp
+│   ├── cache.h
 │   ├── config
 │   ├── config.example
 │   ├── http_client.cpp
 │   ├── http_client.h
 │   ├── main.cpp
 │   ├── Makefile
-│   ├── master_init_db.sh
-│   └── master.db
+│   ├── master.db
+│   └── master_init_db.sh
 ├── mongoose/
 │   ├── mongoose.c
 │   └── mongoose.h
+├── README.md
+├── report.md
 ├── scripts/
 │   ├── build_and_run.sh
+│   ├── cache_speed_test.sh
 │   ├── check_databases.sh
 │   ├── init_all_databases.sh
 │   ├── show_logs.sh
 │   └── test_requests.sh
 ├── slave1/
+│   ├── cache.cpp
+│   ├── cache.h
 │   ├── config
 │   ├── config.example
 │   ├── main.cpp
 │   ├── Makefile
-│   ├── slave1_init_db.sh
-│   └── slave1.db
-├── slave2/
-│   ├── config
-│   ├── config.example
-│   ├── main.cpp
-│   ├── Makefile
-│   ├── slave2_init_db.sh
-│   └── slave2.db
-├── README.md
-└── report.md
+│   ├── slave1.db
+│   └── slave1_init_db.sh
+└── slave2/
+    ├── cache.cpp
+    ├── cache.h
+    ├── config
+    ├── config.example
+    ├── main.cpp
+    ├── Makefile
+    ├── slave2.db
+    └── slave2_init_db.sh
 ```
 
-Generated object files, executables, databases, and logs may also appear after compilation and execution.
+## Required Packages
 
----
-
-## 3. Installing the Required Dependencies
-
-The expected operating system is Ubuntu 22.04.
-
-Install the required packages on every VM:
+Install the required packages on the Master, Slave1, and Slave2 virtual machines:
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential sqlite3 libsqlite3-dev curl coreutils
+sudo apt install -y \
+    build-essential \
+    g++ \
+    sqlite3 \
+    libsqlite3-dev \
+    memcached \
+    libmemcached-dev \
+    netcat-openbsd \
+    curl \
+    python3
 ```
 
-The packages provide:
+Memcached provides the in-memory cache service. `libmemcached-dev` provides the C/C++ client library used by the programs. SQLite is used as persistent storage, and Mongoose is used to implement the HTTP servers and inter-node communication.
 
-- `g++`: compiles the C++ source files.
-- `gcc`: compiles `mongoose.c`.
-- `make`: builds the Master and Slave programs through their Makefiles.
-- `sqlite3`: creates and inspects the SQLite databases.
-- `libsqlite3-dev`: provides the SQLite development headers and library.
-- `curl`: sends HTTP test requests.
-- `stdbuf`: prevents delayed log output in `build_and_run.sh`.
+## Installing and Running Memcached
 
-Verify the installation:
+Memcached must be installed and running on all three virtual machines.
+
+Enable and start the service with:
 
 ```bash
-g++ --version
-gcc --version
-make --version
-sqlite3 --version
-curl --version
+sudo systemctl enable memcached
+sudo systemctl start memcached
 ```
 
-Mongoose is included in the `mongoose/` directory and does not require a separate installation.
-
-Grant execution permission to the Bash scripts:
+Check the service status with:
 
 ```bash
-chmod +x master/master_init_db.sh
-chmod +x slave1/slave1_init_db.sh
-chmod +x slave2/slave2_init_db.sh
-chmod +x scripts/*.sh
+sudo systemctl status memcached --no-pager
 ```
 
----
+In this project, Memcached listens only on the loopback interface:
 
-## 4. Node Configuration
+```text
+127.0.0.1:11211
+```
 
-IP addresses, ports, database paths, and the Slave request timeout are read from configuration files. They are not hard-coded in the C++ source code.
+This means that each application accesses only the Memcached instance installed on the same VM. The service is not exposed directly to the external network.
 
-### 4.1 Master configuration
+The listening address can be checked with:
 
-Example `master/config` for three separate VMs:
+```bash
+sudo ss -lntp | grep 11211
+```
+
+A simple status test can be performed inside each VM:
+
+```bash
+echo "stats" | nc -q 1 localhost 11211
+```
+
+To clear the cache on a VM, run:
+
+```bash
+echo "flush_all" | nc -q 1 localhost 11211
+```
+
+A successful cache flush returns:
+
+```text
+OK
+```
+
+## Configuration Files
+
+Each node reads its runtime settings from a configuration file. IP addresses, ports, database paths, cache settings, and timeouts are not hard-coded in the source code.
+
+A typical Master configuration is:
 
 ```ini
 PORT=8000
 DATABASE=master.db
-SLAVE_TIMEOUT_MS=3000
 
 SLAVE1_IP=192.168.122.18
 SLAVE1_PORT=9001
 
 SLAVE2_IP=192.168.122.190
 SLAVE2_PORT=9002
-```
 
-Replace the example addresses with the actual IP addresses assigned to the Slave VMs.
-
-The Master also supports the optional shared-IP configuration:
-
-```ini
-PORT=8000
-DATABASE=master.db
 SLAVE_TIMEOUT_MS=3000
 
-SLAVE_IP=127.0.0.1
-SLAVE1_PORT=9001
-SLAVE2_PORT=9002
+MEMCACHED_HOST=127.0.0.1
+MEMCACHED_PORT=11211
+CACHE_TTL=300
 ```
 
-When `SLAVE1_IP` or `SLAVE2_IP` is defined, the node-specific value overrides `SLAVE_IP`.
-
-### 4.2 Slave1 configuration
-
-`slave1/config`:
+A typical Slave1 configuration is:
 
 ```ini
 PORT=9001
 DATABASE=slave1.db
+
+MEMCACHED_HOST=127.0.0.1
+MEMCACHED_PORT=11211
+CACHE_TTL=300
 ```
 
-### 4.3 Slave2 configuration
-
-`slave2/config`:
+A typical Slave2 configuration is:
 
 ```ini
 PORT=9002
 DATABASE=slave2.db
+
+MEMCACHED_HOST=127.0.0.1
+MEMCACHED_PORT=11211
+CACHE_TTL=300
 ```
 
-The configuration file path can be passed as the first program argument. When no argument is provided, the program uses a file named `config` in the current directory.
-
----
-
-## 5. Initializing the SQLite Databases
-
-The databases are created from the CSV files in the `data/` directory. The initialization scripts delete the previous database before recreating it, so repeated execution does not duplicate readings.
-
-From the root of the `01` directory, initialize all databases:
-
-```bash
-./scripts/init_all_databases.sh
-```
-
-This command creates:
+The cache key format is:
 
 ```text
-master/master.db
-slave1/slave1.db
-slave2/slave2.db
+sensor:<sensor_type>:<sensor_id>
 ```
 
-The corresponding input files are:
+For example:
 
 ```text
-data/master_sensors.csv
-data/slave1_sensors.csv
-data/slave2_sensors.csv
+sensor:temperature:201
 ```
 
-A different CSV directory can be supplied as an argument:
+## Database Initialization
+
+The SQLite databases can be initialized from the CSV files in the `data/` directory.
+
+From the root of Section 2, run:
 
 ```bash
-./scripts/init_all_databases.sh /path/to/csv_directory
+bash scripts/init_all_databases.sh
 ```
 
-The directory must contain files with the expected names.
-
-Individual database initialization is also possible:
+The databases can be checked with:
 
 ```bash
-./master/master_init_db.sh \
-    ./master/master.db \
-    ./data/master_sensors.csv
+bash scripts/check_databases.sh
 ```
+
+The database contains the following main tables:
+
+```text
+sensors
+sensor_readings
+node_info
+```
+
+The `sensors` table stores sensor metadata. The `sensor_readings` table stores sensor values and timestamps.
+
+## Compiling the Programs
+
+Each node has its own Makefile. The applications must be compiled on their corresponding virtual machines.
+
+### Compile Master
+
+On the Master VM:
 
 ```bash
-./slave1/slave1_init_db.sh \
-    ./slave1/slave1.db \
-    ./data/slave1_sensors.csv
+cd ~/master
+make clean
+make
 ```
+
+The Master build compiles and links `main.cpp`, `http_client.cpp`, `cache.cpp`, and `mongoose.c` with SQLite and libmemcached.
+
+### Compile Slave1
+
+On the Slave1 VM:
 
 ```bash
-./slave2/slave2_init_db.sh \
-    ./slave2/slave2.db \
-    ./data/slave2_sensors.csv
+cd ~/slave1
+make clean
+make
 ```
 
-Inspect all initialized databases:
+### Compile Slave2
+
+On the Slave2 VM:
 
 ```bash
-./scripts/check_databases.sh
+cd ~/slave2
+make clean
+make
 ```
 
----
-
-## 6. Compiling the Master and Slave Programs
-
-Each node has an independent Makefile.
-
-### 6.1 Compile the Master
-
-```bash
-make -C master clean
-make -C master
-```
-
-Generated executable:
+A successful build creates these executables:
 
 ```text
 master/master
-```
-
-### 6.2 Compile Slave1
-
-```bash
-make -C slave1 clean
-make -C slave1
-```
-
-Generated executable:
-
-```text
 slave1/slave1
-```
-
-### 6.3 Compile Slave2
-
-```bash
-make -C slave2 clean
-make -C slave2
-```
-
-Generated executable:
-
-```text
 slave2/slave2
 ```
 
-Compile all nodes:
+## Running Master and Slave Nodes
+
+The three programs must be running at the same time.
+
+### Start Slave1
+
+On the Slave1 VM:
 
 ```bash
-for node in master slave1 slave2; do
-    make -C "$node" clean
-    make -C "$node"
-done
-```
-
----
-
-## 7. Running the Programs
-
-### 7.1 Running all nodes on one machine
-
-For local development, configure the Master to use `127.0.0.1` and different ports, then run:
-
-```bash
-./scripts/build_and_run.sh
-```
-
-The script performs the following operations:
-
-1. Initializes all SQLite databases from the CSV files.
-2. Compiles the Master, Slave1, and Slave2 programs.
-3. Starts all three nodes.
-4. Writes their output to the `logs/` directory.
-5. Stops all nodes when `Ctrl+C` is pressed.
-
-While the script is running, open another terminal to send requests or run the test script.
-
-### 7.2 Running the system on three VMs
-
-The recommended startup order is:
-
-1. Start Slave1.
-2. Start Slave2.
-3. Start the Master.
-4. Send requests only to the Master.
-
-#### On the Slave1 VM
-
-```bash
-cd /path/to/01
-make -C slave1
-cd slave1
+cd ~/slave1
 ./slave1 config
 ```
 
-#### On the Slave2 VM
+Expected startup output includes:
+
+```text
+Slave running on port 9001, database: slave1.db, cache: enabled
+```
+
+### Start Slave2
+
+On the Slave2 VM:
 
 ```bash
-cd /path/to/01
-make -C slave2
-cd slave2
+cd ~/slave2
 ./slave2 config
 ```
 
-#### On the Master VM
+Expected startup output includes:
+
+```text
+Slave running on port 9002, database: slave2.db, cache: enabled
+```
+
+### Start Master
+
+On the Master VM:
 
 ```bash
-cd /path/to/01
-make -C master
-cd master
+cd ~/master
 ./master config
 ```
 
-The programs listen on `0.0.0.0`, so they accept connections through the VM network interface on the port defined in their configuration file.
+Expected startup output includes:
 
----
-
-## 8. Sending Requests to the Master
-
-The operator must send requests only to the Master.
-
-General request format:
-
-```bash
-curl -i \
-    "http://<MASTER_IP>:<MASTER_PORT>/api/sensor?id=<SENSOR_ID>&type=<SENSOR_TYPE>"
+```text
+Master running on port 8000, database: master.db, cache: enabled
+Master Memcached: 127.0.0.1:11211, TTL: 300 seconds
+Slave1: 192.168.122.18:9001
+Slave2: 192.168.122.190:9002
 ```
 
-For local execution, use `127.0.0.1:8000`.
+The terminal running each server must remain open while tests are performed.
 
-### 8.1 Reading a sensor stored in the Master
+## Sending Requests
 
-```bash
-curl -i \
-    "http://127.0.0.1:8000/api/sensor?id=101&type=temperature"
+The operator sends requests only to the Master node.
+
+The endpoint format is:
+
+```text
+GET /api/sensor?type=<sensor_type>&id=<sensor_id>
 ```
 
-Expected source field:
+A request for a sensor stored on the Master can be sent from the host system with:
+
+```bash
+curl -s \
+"http://192.168.122.22:8000/api/sensor?type=temperature&id=101" \
+| python3 -m json.tool
+```
+
+A request for a sensor stored on Slave1 is:
+
+```bash
+curl -s \
+"http://192.168.122.22:8000/api/sensor?type=temperature&id=201" \
+| python3 -m json.tool
+```
+
+A request for a sensor stored on Slave2 is:
+
+```bash
+curl -s \
+"http://192.168.122.22:8000/api/sensor?type=temperature&id=301" \
+| python3 -m json.tool
+```
+
+Example response:
 
 ```json
 {
-  "source": "master",
-  "data": {
-    "sensor_id": "101",
-    "sensor_type": "temperature",
-    "sensor_name": "Floor1_Room101_Temp",
-    "location": "Floor1_Room101",
-    "value": "24.8",
-    "unit": "C",
-    "recorded_at": "2026-06-01 10:15:00"
-  }
+    "source": "cache",
+    "response_time_us": 73,
+    "data": {
+        "sensor_id": "201",
+        "sensor_type": "temperature",
+        "sensor_name": "Floor2_Room201_Temp",
+        "location": "Floor2_Room201",
+        "value": "25.3",
+        "unit": "C",
+        "recorded_at": "2026-06-01 10:15:00"
+    }
 }
 ```
 
-### 8.2 Reading a sensor stored in Slave1
+The `source` field has the following meanings:
 
-```bash
-curl -i \
-    "http://127.0.0.1:8000/api/sensor?id=204&type=co2"
-```
+| Source | Meaning |
+|---|---|
+| `master` | Data was read from the Master SQLite database. |
+| `slave1` | The request was forwarded to Slave1. |
+| `slave2` | The request was forwarded to Slave2. |
+| `cache` | Data was returned directly from the Master Memcached instance. |
 
-The response contains:
+## Cache Read Flow
 
-```json
-{
-  "source": "slave1",
-  "data": {
-    "sensor_id": "204",
-    "sensor_type": "co2"
-  }
-}
-```
-
-### 8.3 Reading a sensor stored in Slave2
-
-```bash
-curl -i \
-    "http://127.0.0.1:8000/api/sensor?id=304&type=smoke"
-```
-
-The response contains:
-
-```json
-{
-  "source": "slave2",
-  "data": {
-    "sensor_id": "304",
-    "sensor_type": "smoke"
-  }
-}
-```
-
-### 8.4 Requesting a sensor that does not exist
-
-```bash
-curl -i \
-    "http://127.0.0.1:8000/api/sensor?id=999&type=temperature"
-```
-
-Expected response:
-
-```json
-{
-  "error": "sensor reading not found in any node"
-}
-```
-
-Expected HTTP status:
+The Master follows this lookup order:
 
 ```text
-404 Not Found
+Client
+  |
+  v
+Master Memcached
+  |
+  |-- Cache Hit --> Return response
+  |
+  |-- Cache Miss
+          |
+          v
+      Master SQLite
+          |
+          |-- Found --> Store in Master cache --> Return response
+          |
+          |-- Not Found
+                  |
+                  v
+               Slave1
+                  |
+                  |-- Found --> Store in Master cache --> Return response
+                  |
+                  |-- Not Found
+                          |
+                          v
+                       Slave2
+                          |
+                          |-- Found --> Store in Master cache --> Return response
+                          |
+                          |-- Not Found --> Return HTTP 404
 ```
 
-### 8.5 Invalid request
+Each Slave also checks its own Memcached instance before reading its local SQLite database. In the final design, the Master cache is always checked before the Master database and before any request is forwarded to a Slave node.
 
-```bash
-curl -i \
-    "http://127.0.0.1:8000/api/sensor?id=101"
-```
+## Running the Speed Test Script
 
-Expected response:
-
-```json
-{
-  "error": "id and type query parameters are required"
-}
-```
-
-Expected HTTP status:
+The speed test script is located at:
 
 ```text
-400 Bad Request
+scripts/cache_speed_test.sh
 ```
 
----
+The script sends requests for all 12 sensors in two rounds.
 
-## 9. Database Structure
-
-Each node has a local SQLite database with the same schema.
-
-### 9.1 `node_info`
-
-Stores information about the node itself.
-
-```sql
-CREATE TABLE node_info (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    node_name TEXT NOT NULL,
-    node_role TEXT NOT NULL,
-    description TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Important fields:
-
-- `node_name`: `master`, `slave1`, or `slave2`.
-- `node_role`: `MASTER` or `SLAVE`.
-- `description`: short description of the node.
-
-### 9.2 `sensors`
-
-Stores the static metadata of each sensor.
-
-```sql
-CREATE TABLE sensors (
-    sensor_id TEXT PRIMARY KEY,
-    sensor_type TEXT NOT NULL,
-    sensor_name TEXT NOT NULL,
-    location TEXT,
-    unit TEXT,
-    node_name TEXT NOT NULL,
-    is_active INTEGER NOT NULL DEFAULT 1
-);
-```
-
-### 9.3 `sensor_readings`
-
-Stores the recorded values of the sensors.
-
-```sql
-CREATE TABLE sensor_readings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sensor_id TEXT NOT NULL,
-    value TEXT NOT NULL,
-    recorded_at TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (sensor_id) REFERENCES sensors(sensor_id)
-);
-```
-
-The application finds the newest reading by ordering matching records by:
-
-```sql
-ORDER BY recorded_at DESC, id DESC
-LIMIT 1
-```
-
-The following indexes improve lookup speed:
-
-```sql
-CREATE INDEX idx_sensors_type_id
-    ON sensors(sensor_type, sensor_id);
-
-CREATE INDEX idx_readings_sensor_time
-    ON sensor_readings(sensor_id, recorded_at DESC);
-```
-
-Example manual inspection:
-
-```bash
-sqlite3 -header -column master/master.db \
-    "SELECT * FROM sensors ORDER BY sensor_id;"
-```
-
-```bash
-sqlite3 -header -column master/master.db \
-    "SELECT * FROM sensor_readings ORDER BY sensor_id, recorded_at;"
-```
-
----
-
-## 10. Network Diagram
-
-### 10.1 Three-VM deployment
-
-```mermaid
-flowchart LR
-    O[Operator / curl]
-    M[Master VM\nPort 8000\nmaster.db]
-    S1[Slave1 VM\nPort 9001\nslave1.db]
-    S2[Slave2 VM\nPort 9002\nslave2.db]
-
-    O -->|HTTP GET| M
-    M -->|Local SQLite query| M
-    M -->|HTTP GET if not found| S1
-    M -->|HTTP GET if not found| S2
-    S1 -->|HTTP JSON response| M
-    S2 -->|HTTP JSON response| M
-    M -->|Final HTTP JSON response| O
-```
-
-Text version:
+The tested sensors are:
 
 ```text
-                         Private LAN
+Master:
+101 temperature
+102 humidity
+103 motion
+104 temperature
 
-+------------+       +------------------+
-| Operator   | ----> | Master VM        |
-| curl       | HTTP  | IP:<MASTER_IP>   |
-+------------+       | Port:8000        |
-                     | master.db        |
-                     +--------+---------+
-                              |
-                 +------------+------------+
-                 |                         |
-                 v                         v
-        +------------------+      +------------------+
-        | Slave1 VM        |      | Slave2 VM        |
-        | IP:<SLAVE1_IP>   |      | IP:<SLAVE2_IP>   |
-        | Port:9001        |      | Port:9002        |
-        | slave1.db        |      | slave2.db        |
-        +------------------+      +------------------+
+Slave1:
+201 temperature
+202 humidity
+203 motion
+204 co2
+
+Slave2:
+301 temperature
+302 humidity
+303 motion
+304 smoke
 ```
 
-The operator is not expected to communicate directly with the Slave APIs. Firewall rules should restrict Slave access to the Master IP.
+Before running the benchmark, make sure that Master, Slave1, and Slave2 are running.
 
-### 10.2 Shared-IP deployment
+Because the Master Memcached service listens only on `127.0.0.1`, the cache must be cleared from inside the Master VM before the benchmark.
+
+On the Master VM, run:
+
+```bash
+echo "flush_all" | nc -q 1 localhost 11211
+```
+
+Then run the benchmark from the host system:
+
+```bash
+cd ~/embedded/embedded_hw04/02
+bash scripts/cache_speed_test.sh
+```
+
+The script sends all requests to:
 
 ```text
-127.0.0.1:8000  -> Master
-127.0.0.1:9001  -> Slave1
-127.0.0.1:9002  -> Slave2
+http://192.168.122.22:8000/api/sensor
 ```
 
-This mode is useful for local development and implements the optional shared-IP/different-port challenge.
-
----
-
-## 11. Request and Response Path
-
-The request flow is sequential:
-
-1. The operator sends `GET /api/sensor` to the Master.
-2. The Master validates the `id` and `type` query parameters.
-3. The Master searches its local SQLite database.
-4. If the reading is found, the Master immediately returns HTTP `200` with `"source":"master"`.
-5. If the reading is not found, the Master sends the same request to Slave1.
-6. If Slave1 returns HTTP `200`, the Master returns the data to the operator with `"source":"slave1"`.
-7. If Slave1 returns HTTP `404`, the Master sends the request to Slave2.
-8. If Slave2 returns HTTP `200`, the Master returns the data with `"source":"slave2"`.
-9. If every node returns “not found,” the Master returns HTTP `404`.
-10. If a database error, connection error, unexpected HTTP response, or Slave timeout prevents a complete distributed search, the Master returns HTTP `503`.
-
-Sequence diagram:
-
-```mermaid
-sequenceDiagram
-    participant O as Operator
-    participant M as Master
-    participant D0 as master.db
-    participant S1 as Slave1
-    participant D1 as slave1.db
-    participant S2 as Slave2
-    participant D2 as slave2.db
-
-    O->>M: GET /api/sensor?id=...&type=...
-    M->>D0: Query latest reading
-
-    alt Found in Master
-        D0-->>M: Reading
-        M-->>O: 200 JSON, source=master
-    else Not found in Master
-        D0-->>M: Not found
-        M->>S1: GET /api/sensor
-        S1->>D1: Query latest reading
-
-        alt Found in Slave1
-            D1-->>S1: Reading
-            S1-->>M: 200 JSON
-            M-->>O: 200 JSON, source=slave1
-        else Not found in Slave1
-            D1-->>S1: Not found
-            S1-->>M: 404
-            M->>S2: GET /api/sensor
-            S2->>D2: Query latest reading
-
-            alt Found in Slave2
-                D2-->>S2: Reading
-                S2-->>M: 200 JSON
-                M-->>O: 200 JSON, source=slave2
-            else Not found in all nodes
-                D2-->>S2: Not found
-                S2-->>M: 404
-                M-->>O: 404 JSON
-            end
-        end
-    end
-```
-
----
-
-## 12. Testing the Program
-
-### 12.1 Automated request tests
-
-Start all nodes first. Then, from another terminal, run:
-
-```bash
-./scripts/test_requests.sh
-```
-
-The test script checks the following cases:
-
-1. A reading found in the Master.
-2. A reading found in Slave1 through the Master.
-3. A reading found in Slave2 through the Master.
-4. A reading not found in any node.
-5. A request with a missing `type` parameter.
-6. An unknown API route.
-
-A successful result ends with:
+The results are saved in:
 
 ```text
-Passed: 6
-Failed: 0
-All tests passed successfully.
+cache_speed_result.csv
 ```
 
-For a Master running on another VM, provide its address through `MASTER_HOST`:
-
-```bash
-MASTER_HOST=<MASTER_IP> ./scripts/test_requests.sh
-```
-
-A different Master configuration file can be supplied through `MASTER_CONFIG`:
-
-```bash
-MASTER_CONFIG=/path/to/master/config \
-MASTER_HOST=<MASTER_IP> \
-./scripts/test_requests.sh
-```
-
-### 12.2 Database tests
-
-Check the schema, row counts, and latest sensor readings:
-
-```bash
-./scripts/check_databases.sh
-```
-
-### 12.3 Network connectivity tests
-
-From the Master VM:
-
-```bash
-ping -c 4 <SLAVE1_IP>
-ping -c 4 <SLAVE2_IP>
-```
-
-Check the ports:
-
-```bash
-nc -zv <SLAVE1_IP> 9001
-nc -zv <SLAVE2_IP> 9002
-```
-
-If `nc` is not installed:
-
-```bash
-sudo apt install -y netcat-openbsd
-```
-
-### 12.4 Manual failure test
-
-Stop one Slave and request data that belongs to it. The Master should detect that the distributed lookup could not be completed and return:
+The CSV file has this format:
 
 ```text
-HTTP 503
+round,sensor_id,sensor_type,source,response_time_us
 ```
 
-```json
-{
-  "error": "distributed query could not be completed"
-}
-```
+## Benchmark Method
 
-### 12.5 Viewing logs
+### Round 1 — Cache Miss
 
-```bash
-./scripts/show_logs.sh
-```
+The Master cache is cleared before the benchmark. During the first round:
 
-The log files are:
+- Sensors `101` to `104` are read from the Master SQLite database.
+- Sensors `201` to `204` are obtained through Slave1.
+- Sensors `301` to `304` are obtained through Slave2.
+- Every successful result is stored in the Master cache.
+
+### Round 2 — Cache Hit
+
+The same requests are sent again without clearing the cache. During this round:
+
+- The Master checks its Memcached instance first.
+- All previously retrieved values are returned from the Master cache.
+- SQLite and the Slave nodes are not accessed again for cached items.
+
+If a sensor is not returned from cache in the second round, possible causes include an unsuccessful first request, an incorrect sensor type or ID, cache expiration, a Memcached restart, a manual cache flush, or a failed cache insertion.
+
+## Benchmark Results
+
+The measured results were:
+
+| Sensor ID | Sensor Type | Round 1 Source | Round 1 Time (µs) | Round 2 Source | Round 2 Time (µs) |
+|---:|---|---|---:|---|---:|
+| 101 | temperature | master | 8357 | cache | 182 |
+| 102 | humidity | master | 486 | cache | 90 |
+| 103 | motion | master | 457 | cache | 205 |
+| 104 | temperature | master | 603 | cache | 159 |
+| 201 | temperature | slave1 | 9588 | cache | 66 |
+| 202 | humidity | slave1 | 1512 | cache | 120 |
+| 203 | motion | slave1 | 1789 | cache | 117 |
+| 204 | co2 | slave1 | 1755 | cache | 139 |
+| 301 | temperature | slave2 | 9954 | cache | 109 |
+| 302 | humidity | slave2 | 2348 | cache | 108 |
+| 303 | motion | slave2 | 2814 | cache | 73 |
+| 304 | smoke | slave2 | 2590 | cache | 217 |
+
+## Result Analysis
+
+The benchmark confirms that the caching layer works correctly.
+
+In the first round, the cache was empty. The Master therefore accessed its local SQLite database or forwarded the request to a Slave node. Requests involving a Slave had higher response times because they included network communication, HTTP processing, a Slave cache lookup, and potentially a local SQLite read.
+
+In the second round, every request was returned from the Master cache. The response source for all 12 sensors was `cache`, and the response times were substantially lower.
+
+For example:
+
+| Sensor | First Request | Second Request |
+|---|---:|---:|
+| 101 | 8357 µs | 182 µs |
+| 201 | 9588 µs | 66 µs |
+| 301 | 9954 µs | 109 µs |
+
+The first request for sensor `201` required a distributed lookup through Slave1 and took `9588 µs`. The second request was served directly from the Master cache and took only `66 µs`.
+
+Similarly, the first request for sensor `301` required communication with Slave2 and took `9954 µs`, while the cached request took `109 µs`.
+
+These results show that Memcached reduces repeated-read latency, lowers the number of SQLite reads, and prevents unnecessary communication with remote nodes. The improvement is especially clear for sensors stored on the Slave nodes because a Master cache hit removes both database access and network communication.
+
+The unusually high time of the first request for some sensors may also include one-time costs such as TCP connection establishment, filesystem page loading, and cold network or process state. Therefore, the benchmark is mainly intended to demonstrate the functional difference between cache-miss and cache-hit paths rather than provide a hardware-independent performance measurement.
+
+## Logs and Utility Scripts
+
+Application logs are stored in:
 
 ```text
 logs/master.log
@@ -784,176 +562,35 @@ logs/slave1.log
 logs/slave2.log
 ```
 
-The Master log shows when a request is forwarded to Slave1 or Slave2.
-
----
-
-## 13. HTTP Security Review and Possible Improvements
-
-The current implementation uses plain HTTP and is intended for an educational LAN environment. Plain HTTP does not encrypt the request path, query parameters, headers, or response body. A device on the same network may be able to observe or modify the traffic.
-
-### 13.1 Current security limitations
-
-- No TLS encryption.
-- No operator authentication.
-- No authentication between the Master and Slaves.
-- No authorization or role-based access control.
-- No request-rate limitation.
-- The servers listen on `0.0.0.0`.
-- The Slave ports may be reachable directly unless firewall rules are applied.
-- Sensor identifiers and returned values are transferred as readable text.
-
-### 13.2 Security mechanisms already present in the implementation
-
-- Query parameters are validated before database access.
-- SQLite prepared statements and bound parameters are used instead of constructing SQL queries from user input.
-- The HTTP client uses a configurable timeout for Slave requests.
-- Invalid routes and invalid inputs receive explicit HTTP error responses.
-- IP addresses, ports, database paths, and timeouts are external configuration values.
-
-### 13.3 Recommended improvements
-
-1. **Use HTTPS/TLS**
-
-   Configure Mongoose with TLS certificates and replace `http://` endpoints with `https://` endpoints. TLS provides confidentiality and integrity for operator-to-Master and Master-to-Slave traffic.
-
-2. **Authenticate API requests**
-
-   Require an API key, signed token, or another authentication mechanism for operator requests.
-
-3. **Authenticate node-to-node communication**
-
-   Use mutual TLS or a shared-secret authorization header so that Slave nodes accept requests only from the trusted Master.
-
-4. **Apply firewall restrictions**
-
-   Slave1 should accept TCP port `9001` only from the Master IP, and Slave2 should accept TCP port `9002` only from the Master IP.
-
-   Example on Slave1:
-
-   ```bash
-   sudo ufw default deny incoming
-   sudo ufw allow from <MASTER_IP> to any port 9001 proto tcp
-   sudo ufw enable
-   ```
-
-   Example on Slave2:
-
-   ```bash
-   sudo ufw default deny incoming
-   sudo ufw allow from <MASTER_IP> to any port 9002 proto tcp
-   sudo ufw enable
-   ```
-
-5. **Limit operator access to the Master**
-
-   Allow port `8000` only from the operator network or a trusted management host.
-
-6. **Add rate limiting and request-size limits**
-
-   This reduces the risk of denial-of-service attacks and excessive resource consumption.
-
-7. **Protect configuration and database files**
-
-   Apply restrictive file permissions:
-
-   ```bash
-   chmod 600 master/config slave1/config slave2/config
-   chmod 600 master/master.db slave1/slave1.db slave2/slave2.db
-   ```
-
-8. **Avoid logging secrets**
-
-   Authentication tokens and confidential sensor data should not be written to logs.
-
-9. **Use network segmentation**
-
-   Place the three nodes in a private VLAN or isolated virtual network and expose only the Master to the operator.
-
----
-
-## 14. Common Errors
-
-### Configuration file not found
-
-Run the program from the correct node directory or pass an explicit path:
+Logs can be displayed with:
 
 ```bash
-cd master
-./master config
+bash scripts/show_logs.sh
 ```
 
-### SQLite database not found
-
-Initialize the databases:
+Manual request tests can be performed with:
 
 ```bash
-./scripts/init_all_databases.sh
+bash scripts/test_requests.sh
 ```
 
-### Address already in use
+The complete build and execution workflow is provided in:
 
-Check which process owns the ports:
-
-```bash
-ss -lntp | grep -E ':8000|:9001|:9002'
+```text
+scripts/build_and_run.sh
 ```
 
-Stop the old process or change the configured port.
+## Summary
 
-### Distributed query could not be completed
+Section 2 successfully adds a two-layer read architecture to every node:
 
-Check:
-
-- Whether both Slave programs are running.
-- Whether the Master configuration contains the correct IP addresses and ports.
-- Whether the Slave ports are reachable from the Master.
-- Whether the firewall allows Master-to-Slave traffic.
-- Whether `SLAVE_TIMEOUT_MS` is large enough for the network.
-
-### Unexpected `404`
-
-Confirm the sensor identifier and type in the database:
-
-```bash
-sqlite3 -header -column master/master.db \
-    "SELECT sensor_id, sensor_type FROM sensors ORDER BY sensor_id;"
+```text
+Memcached
+    |
+    v
+SQLite
 ```
 
----
+The Master cache is checked before the Master database and before forwarding requests to Slave1 or Slave2. On a cache miss, data is retrieved from the appropriate SQLite database and stored in the cache. On a cache hit, data is returned directly from memory.
 
-## 15. Suggested Final Demonstration
-
-A short final test video can show:
-
-1. The IP address of each VM.
-2. Database initialization.
-3. Compilation through Makefiles.
-4. Starting Slave1, Slave2, and the Master.
-5. A request found in the Master.
-6. A request found in Slave1.
-7. A request found in Slave2.
-8. A request not found in any node.
-9. Execution of `test_requests.sh` with all tests passing.
-10. The Master log showing request forwarding.
-
-The implementation details do not need to be explained in the video; only the commands and visible results are required.
-
----
-
-## 16. README and Report Scope
-
-This README is the operational guide for Section 01. It explains installation, configuration, database initialization, compilation, execution, request submission, testing, the network diagram, the request path, and the HTTP security review.
-
-The separate `report.md` should provide a more detailed design-oriented discussion, including:
-
-- The system objectives and design decisions.
-- The distributed architecture and responsibilities of each node.
-- Analysis of the supplied CSV data and database schema.
-- Communication and failure-handling strategy.
-- Actual test outputs and interpretation of the results.
-- Network and request-flow diagrams.
-- Security and reliability analysis.
-- Final conclusions.
-
-The report should describe the system from the designer's point of view and should not explain the source code line by line.
+The two-round benchmark confirms that all 12 sensors are retrieved from their original databases during the first round and from the Master cache during the second round. This design reduces response time, lowers SQLite read load, and avoids repeated network communication with the Slave nodes.
