@@ -1,0 +1,5 @@
+# Slave Node Configuration
+
+PORT=9002
+
+DATABASE=slave.db
