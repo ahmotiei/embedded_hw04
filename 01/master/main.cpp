@@ -10,14 +10,12 @@
 
 int PORT;
 
-std::string DATABASE;
+std::string SLAVE_IP;
 
-std::string SLAVE1_IP;
 int SLAVE1_PORT;
-
-
-std::string SLAVE2_IP;
 int SLAVE2_PORT;
+
+std::string DATABASE;
 
 void load_config()
 {
@@ -37,16 +35,13 @@ void load_config()
         else if(line.find("DATABASE=")==0)
             DATABASE=line.substr(9);
 
-        else if(line.find("SLAVE1_IP=")==0)
-            SLAVE1_IP=line.substr(10);
+
+        if(line.find("SLAVE_IP=")==0)
+            SLAVE_IP=line.substr(9);
 
 
         else if(line.find("SLAVE1_PORT=")==0)
             SLAVE1_PORT=stoi(line.substr(12));
-
-
-        else if(line.find("SLAVE2_IP=")==0)
-            SLAVE2_IP=line.substr(10);
 
 
         else if(line.find("SLAVE2_PORT=")==0)
@@ -198,7 +193,7 @@ void *ev_data)
 
         if(request_slave(
             mgr,
-            SLAVE1_IP,
+            SLAVE_IP,
             SLAVE1_PORT,
             type,
             atoi(id),
@@ -222,7 +217,7 @@ void *ev_data)
 
         if(request_slave(
             mgr,
-            SLAVE2_IP,
+            SLAVE_IP,
             SLAVE2_PORT,
             type,
             atoi(id),
