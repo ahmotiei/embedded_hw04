@@ -157,11 +157,12 @@ value))
 
 
 mg_http_reply(
-c,
-200,
-"Content-Type: application/json\r\n",
-"{\"value\":%.2f}",
-value);
+    c,
+    200,
+    "Content-Type: application/json\r\nConnection: close\r\n",
+    "{\"value\":%.2f}",
+    value
+);
 
 
 }
@@ -172,10 +173,11 @@ else
 
 
 mg_http_reply(
-c,
-404,
-"",
-"{\"error\":\"not found\"}");
+    c,
+    404,
+    "Content-Type: application/json\r\nConnection: close\r\n",
+    "{\"error\":\"not found\"}"
+);
 
 }
 

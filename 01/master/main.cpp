@@ -4,6 +4,7 @@
 #include <sqlite3.h>
 
 #include "mongoose.h"
+#include "http_client.h"
 
 
 
@@ -11,7 +12,12 @@ int PORT;
 
 std::string DATABASE;
 
+std::string SLAVE1_IP;
+int SLAVE1_PORT;
 
+
+std::string SLAVE2_IP;
+int SLAVE2_PORT;
 
 void load_config()
 {
@@ -30,6 +36,21 @@ void load_config()
 
         else if(line.find("DATABASE=")==0)
             DATABASE=line.substr(9);
+
+        else if(line.find("SLAVE1_IP=")==0)
+            SLAVE1_IP=line.substr(10);
+
+
+        else if(line.find("SLAVE1_PORT=")==0)
+            SLAVE1_PORT=stoi(line.substr(12));
+
+
+        else if(line.find("SLAVE2_IP=")==0)
+            SLAVE2_IP=line.substr(10);
+
+
+        else if(line.find("SLAVE2_PORT=")==0)
+            SLAVE2_PORT=stoi(line.substr(12));
 
     }
 
@@ -101,13 +122,15 @@ bool query_database(
 }
 
 
-
-
 void handler(
 struct mg_connection *c,
 int ev,
 void *ev_data)
 {
+
+    struct mg_mgr *mgr =
+    (struct mg_mgr *) c->fn_data;
+
 
 
     if(ev!=MG_EV_HTTP_MSG)
@@ -169,12 +192,63 @@ void *ev_data)
     else
     {
 
+        std::string response;
+
+
+
+        if(request_slave(
+            mgr,
+            SLAVE1_IP,
+            SLAVE1_PORT,
+            type,
+            atoi(id),
+            response))
+        {
+
+            mg_http_reply(
+            c,
+            200,
+            "Content-Type: application/json\r\n",
+            "{\"source\":\"slave1\",\"data\":%s}",
+            response.c_str()
+            );
+
+
+            return;
+
+        }
+
+
+
+        if(request_slave(
+            mgr,
+            SLAVE2_IP,
+            SLAVE2_PORT,
+            type,
+            atoi(id),
+            response))
+        {
+
+            mg_http_reply(
+            c,
+            200,
+            "Content-Type: application/json\r\n",
+            "{\"source\":\"slave2\",\"data\":%s}",
+            response.c_str()
+            );
+
+
+            return;
+
+        }
+
+
 
         mg_http_reply(
         c,
         404,
-        "",
-        "{\"error\":\"not found in master\"}");
+        "Content-Type: application/json\r\n",
+        "{\"error\":\"sensor not found\"}");
 
     }
 
@@ -209,7 +283,7 @@ int main()
         &mgr,
         url.c_str(),
         handler,
-        NULL);
+        &mgr);
 
 
 

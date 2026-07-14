@@ -2,10 +2,10 @@ TARGET=master
 
 
 all:
-	g++ main.cpp ../mongoose/mongoose.c \
+	g++ main.cpp http_client.cpp ../mongoose/mongoose.c \
 	-I../mongoose \
 	-lsqlite3 \
-	-o $(TARGET)
+	-o master
 
 
 
