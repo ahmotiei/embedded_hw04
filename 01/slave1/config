@@ -1,3 +1,2 @@
 PORT=9001
-
-DATABASE=slave.db
+DATABASE=slave1.db

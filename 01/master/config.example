@@ -1,11 +1,21 @@
+# Master HTTP server
 PORT=8000
-
 DATABASE=master.db
 
+# Timeout for each Master -> Slave HTTP request
+SLAVE_TIMEOUT_MS=3000
 
-SLAVE1_IP=192.168.1.11
+# ------------------------------------------------------------
+# Advanced challenge: one shared IP and different ports
+# ------------------------------------------------------------
+SLAVE_IP=127.0.0.1
 SLAVE1_PORT=9001
-
-
-SLAVE2_IP=192.168.1.12
 SLAVE2_PORT=9002
+
+# ------------------------------------------------------------
+# Separate-VM mode:
+# Uncomment the two node-specific addresses below.
+# Node-specific values override SLAVE_IP.
+# ------------------------------------------------------------
+# SLAVE1_IP=192.168.1.11
+# SLAVE2_IP=192.168.1.12

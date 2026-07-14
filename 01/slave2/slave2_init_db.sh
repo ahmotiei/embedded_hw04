@@ -4,12 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-DB_FILE="${1:-$SCRIPT_DIR/master.db}"
-CSV_FILE="${2:-$PROJECT_ROOT/data/master_sensors.csv}"
+DB_FILE="${1:-$SCRIPT_DIR/slave2.db}"
+CSV_FILE="${2:-$PROJECT_ROOT/data/slave2_sensors.csv}"
 
-NODE_NAME="master"
-NODE_ROLE="MASTER"
-NODE_DESCRIPTION="Main node responsible for receiving operator requests"
+NODE_NAME="slave2"
+NODE_ROLE="SLAVE"
+NODE_DESCRIPTION="Second slave node responsible for local sensor readings"
 
 if ! command -v sqlite3 >/dev/null 2>&1; then
     echo "Error: sqlite3 is not installed."

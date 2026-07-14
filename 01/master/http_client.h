@@ -3,17 +3,14 @@
 
 #include <string>
 
-#include "mongoose.h"
-
-
 bool request_slave(
-    struct mg_mgr *mgr,
     const std::string &ip,
     int port,
-    const std::string &type,
-    int id,
-    std::string &response
+    const std::string &sensor_type,
+    const std::string &sensor_id,
+    int &http_status,
+    std::string &response,
+    int timeout_ms = 3000
 );
-
 
 #endif
