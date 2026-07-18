@@ -2,7 +2,8 @@ PORT=8000
 DATABASE=master.db
 SLAVE_TIMEOUT_MS=3000
 
-# Shared-IP mode for local testing and the advanced challenge
-SLAVE_IP=127.0.0.1
+SLAVE1_IP=192.168.122.18
 SLAVE1_PORT=9001
+
+SLAVE2_IP=192.168.122.190
 SLAVE2_PORT=9002
