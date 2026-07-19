@@ -1,0 +1,2 @@
+PORT=9001
+DATABASE=slave1.db
