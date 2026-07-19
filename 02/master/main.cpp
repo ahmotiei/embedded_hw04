@@ -3,11 +3,13 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <cctype>
 
 #include <sqlite3.h>
 
 #include "http_client.h"
 #include "mongoose.h"
+#include "cache.h"
 
 namespace {
 
@@ -25,6 +27,7 @@ struct Config {
     int slave1_port = 0;
     int slave2_port = 0;
     int slave_timeout_ms = 3000;
+    int cache_ttl = 300;
 };
 
 struct SensorReading {
@@ -50,6 +53,7 @@ enum class SlaveQueryStatus {
 };
 
 Config g_config;
+bool g_cache_available = true;
 
 std::string trim(const std::string &text) {
     const std::size_t first = text.find_first_not_of(" \t\r\n");
@@ -419,6 +423,71 @@ std::string reading_to_json(
     return json.str();
 }
 
+
+
+std::string extract_slave_data_json(
+    const std::string &slave_response
+) {
+    const std::string key = "\"data\":";
+
+    const std::size_t start = slave_response.find(key);
+
+    if (start == std::string::npos) {
+        return slave_response;
+    }
+
+    std::size_t json_start = start + key.size();
+
+    while (json_start < slave_response.size() &&
+           std::isspace(
+               static_cast<unsigned char>(slave_response[json_start])
+           )) {
+        json_start++;
+    }
+
+    if (json_start >= slave_response.size()) {
+        return slave_response;
+    }
+
+    int depth = 0;
+    bool started = false;
+
+    for (std::size_t i = json_start; i < slave_response.size(); i++) {
+
+        if (slave_response[i] == '{') {
+            depth++;
+            started = true;
+        }
+        else if (slave_response[i] == '}') {
+            depth--;
+
+            if (started && depth == 0) {
+                return slave_response.substr(
+                    json_start,
+                    i - json_start + 1
+                );
+            }
+        }
+    }
+
+    return slave_response;
+}
+
+std::string make_cache_key(
+    const std::string &sensor_type,
+    const std::string &sensor_id
+) {
+    std::string normalized_type = sensor_type;
+
+    for (char &c : normalized_type) {
+        c = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(c))
+        );
+    }
+
+    return "sensor:" + normalized_type + ":" + sensor_id;
+}
+
 SlaveQueryStatus query_slave(
     const std::string &node_name,
     const std::string &ip,
@@ -561,6 +630,42 @@ void request_handler(
         return;
     }
 
+    const std::string cache_key =
+    make_cache_key(sensor_type, sensor_id);
+
+    if (g_cache_available) {
+
+        std::string cached_reading_json;
+        std::string cache_error;
+
+        const CacheGetStatus cache_status =
+            cache_get(
+                cache_key,
+                cached_reading_json,
+                cache_error
+            );
+
+        if (cache_status == CacheGetStatus::Hit) {
+
+            mg_http_reply(
+                connection,
+                200,
+                "Content-Type: application/json\r\n",
+                "{\"source\":\"cache\",\"data\":%s}\n",
+                cached_reading_json.c_str()
+            );
+
+            return;
+        }
+
+        if (cache_status == CacheGetStatus::Error) {
+            std::cerr
+                << "Memcached read error: "
+                << cache_error
+                << '\n';
+        }
+    }
+
     SensorReading local_reading;
     std::string database_error;
 
@@ -575,10 +680,25 @@ void request_handler(
     bool distributed_query_incomplete = false;
 
     if (local_status == QueryStatus::Found) {
-        const std::string data =
-            reading_to_json(local_reading);
 
-        mg_http_reply(
+    const std::string data =
+        reading_to_json(local_reading);
+
+
+    if (g_cache_available) {
+
+        std::string cache_error;
+
+        cache_set(
+            cache_key,
+            data,
+            g_config.cache_ttl,
+            cache_error
+        );
+    }
+
+
+    mg_http_reply(
             connection,
             200,
             "Content-Type: application/json\r\n",
@@ -611,6 +731,20 @@ void request_handler(
     );
 
     if (slave_status == SlaveQueryStatus::Found) {
+        if (g_cache_available) {
+
+            std::string cache_error;
+
+            const std::string cache_data =
+                extract_slave_data_json(slave_response);
+
+            cache_set(
+                cache_key,
+                cache_data,
+                g_config.cache_ttl,
+                cache_error
+            );
+        }
         mg_http_reply(
             connection,
             200,

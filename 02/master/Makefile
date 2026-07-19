@@ -7,7 +7,7 @@ CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -Wpedantic -I../mongoose
 CFLAGS := -O2 -Wall -Wextra -I../mongoose
 LDLIBS := -lsqlite3 -lmemcached
 
-OBJECTS := main.o http_client.o mongoose.o
+OBJECTS := main.o http_client.o cache.o mongoose.o
 
 .PHONY: all clean
 
