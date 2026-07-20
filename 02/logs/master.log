@@ -1,0 +1,75 @@
+e8bdf2 3 mongoose.c:7806:mg_mgr_init    MG_IO_SIZE: 16384, TLS: none
+e8bdf2 3 mongoose.c:7719:mg_listen      1 4 http://0.0.0.0:8000
+Master running on port 8000, database: master.db
+Slave1: 127.0.0.1:9001
+Slave2: 127.0.0.1:9002
+e92cab 3 mongoose.c:14239:accept_conn   2 5 accepted 127.0.0.1:49494 -> 127.0.0.1:8000
+e92cab 3 mongoose.c:14082:read_conn     2 5 0:0:0 111 err 0
+e92cac 3 mongoose.c:14092:write_conn    2 5 snd 281/16384 rcv 0/16384 n=281 err=0
+e92cac 3 mongoose.c:14082:read_conn     2 5 0:0:0 -1 err 2
+e92cac 3 mongoose.c:7655:mg_close_conn  2 5 closed
+e92cb6 3 mongoose.c:14239:accept_conn   3 5 accepted 127.0.0.1:49506 -> 127.0.0.1:8000
+e92cb6 3 mongoose.c:14082:read_conn     3 5 0:0:0 103 err 0
+Querying slave1 at 127.0.0.1:9001
+e92cb6 3 mongoose.c:7806:mg_mgr_init    MG_IO_SIZE: 16384, TLS: none
+e92cb6 3 mongoose.c:7690:mg_connect_svc 1 -1 http://127.0.0.1:9001
+e92cb6 3 mongoose.c:14176:mg_connect_re 1 7 -> 127.0.0.1:9001 pend
+e92cb6 3 mongoose.c:14092:write_conn    1 7 snd 111/16384 rcv 0/0 n=111 err=0
+e92cb7 3 mongoose.c:14082:read_conn     1 7 0:0:0 250 err 0
+e92cb7 3 mongoose.c:7655:mg_close_conn  1 7 closed
+e92cb7 3 mongoose.c:7766:mg_mgr_free    All connections closed
+e92cb7 3 mongoose.c:14092:write_conn    3 5 snd 278/16384 rcv 0/16384 n=278 err=0
+e92cb7 3 mongoose.c:14082:read_conn     3 5 0:0:0 -1 err 115
+e92cb7 3 mongoose.c:7655:mg_close_conn  3 5 closed
+e92cc2 3 mongoose.c:14239:accept_conn   4 5 accepted 127.0.0.1:49518 -> 127.0.0.1:8000
+e92cc2 3 mongoose.c:14082:read_conn     4 5 0:0:0 105 err 0
+Querying slave1 at 127.0.0.1:9001
+e92cc3 3 mongoose.c:7806:mg_mgr_init    MG_IO_SIZE: 16384, TLS: none
+e92cc3 3 mongoose.c:7690:mg_connect_svc 1 -1 http://127.0.0.1:9001
+e92cc3 3 mongoose.c:14176:mg_connect_re 1 7 -> 127.0.0.1:9001 pend
+e92cc3 3 mongoose.c:14092:write_conn    1 7 snd 113/16384 rcv 0/0 n=113 err=0
+e92cc3 3 mongoose.c:14082:read_conn     1 7 0:0:0 124 err 0
+e92cc3 3 mongoose.c:7655:mg_close_conn  1 7 closed
+e92cc3 3 mongoose.c:7766:mg_mgr_free    All connections closed
+Querying slave2 at 127.0.0.1:9002
+e92cc3 3 mongoose.c:7806:mg_mgr_init    MG_IO_SIZE: 16384, TLS: none
+e92cc3 3 mongoose.c:7690:mg_connect_svc 1 -1 http://127.0.0.1:9002
+e92cc3 3 mongoose.c:14176:mg_connect_re 1 7 -> 127.0.0.1:9002 pend
+e92cc3 3 mongoose.c:14092:write_conn    1 7 snd 113/16384 rcv 0/0 n=113 err=0
+e92cc4 3 mongoose.c:14082:read_conn     1 7 0:0:0 249 err 0
+e92cc4 3 mongoose.c:7655:mg_close_conn  1 7 closed
+e92cc4 3 mongoose.c:7766:mg_mgr_free    All connections closed
+e92cc4 3 mongoose.c:14092:write_conn    4 5 snd 277/16384 rcv 0/16384 n=277 err=0
+e92cc4 3 mongoose.c:14082:read_conn     4 5 0:0:0 -1 err 115
+e92cc4 3 mongoose.c:7655:mg_close_conn  4 5 closed
+e92ccb 3 mongoose.c:14239:accept_conn   5 5 accepted 127.0.0.1:49524 -> 127.0.0.1:8000
+e92ccb 3 mongoose.c:14082:read_conn     5 5 0:0:0 111 err 0
+Querying slave1 at 127.0.0.1:9001
+e92ccb 3 mongoose.c:7806:mg_mgr_init    MG_IO_SIZE: 16384, TLS: none
+e92ccb 3 mongoose.c:7690:mg_connect_svc 1 -1 http://127.0.0.1:9001
+e92ccc 3 mongoose.c:14176:mg_connect_re 1 7 -> 127.0.0.1:9001 pend
+e92ccc 3 mongoose.c:14092:write_conn    1 7 snd 119/16384 rcv 0/0 n=119 err=0
+e92ccc 3 mongoose.c:14082:read_conn     1 7 0:0:0 124 err 0
+e92ccc 3 mongoose.c:7655:mg_close_conn  1 7 closed
+e92ccc 3 mongoose.c:7766:mg_mgr_free    All connections closed
+Querying slave2 at 127.0.0.1:9002
+e92ccc 3 mongoose.c:7806:mg_mgr_init    MG_IO_SIZE: 16384, TLS: none
+e92ccc 3 mongoose.c:7690:mg_connect_svc 1 -1 http://127.0.0.1:9002
+e92ccc 3 mongoose.c:14176:mg_connect_re 1 7 -> 127.0.0.1:9002 pend
+e92ccc 3 mongoose.c:14092:write_conn    1 7 snd 119/16384 rcv 0/0 n=119 err=0
+e92ccc 3 mongoose.c:14082:read_conn     1 7 0:0:0 124 err 0
+e92ccc 3 mongoose.c:7655:mg_close_conn  1 7 closed
+e92ccc 3 mongoose.c:7766:mg_mgr_free    All connections closed
+e92ccc 3 mongoose.c:14092:write_conn    5 5 snd 136/16384 rcv 0/16384 n=136 err=0
+e92ccc 3 mongoose.c:14082:read_conn     5 5 0:0:0 -1 err 115
+e92ccc 3 mongoose.c:7655:mg_close_conn  5 5 closed
+e92cd2 3 mongoose.c:14239:accept_conn   6 5 accepted 127.0.0.1:49528 -> 127.0.0.1:8000
+e92cd2 3 mongoose.c:14082:read_conn     6 5 0:0:0 94 err 0
+e92cd2 3 mongoose.c:14092:write_conn    6 5 snd 143/16384 rcv 0/16384 n=143 err=0
+e92cd2 3 mongoose.c:14082:read_conn     6 5 0:0:0 -1 err 115
+e92cd2 3 mongoose.c:7655:mg_close_conn  6 5 closed
+e92cd8 3 mongoose.c:14239:accept_conn   7 5 accepted 127.0.0.1:49532 -> 127.0.0.1:8000
+e92cd8 3 mongoose.c:14082:read_conn     7 5 0:0:0 88 err 0
+e92cd8 3 mongoose.c:14092:write_conn    7 5 snd 115/16384 rcv 0/16384 n=115 err=0
+e92cd8 3 mongoose.c:14082:read_conn     7 5 0:0:0 -1 err 115
+e92cd8 3 mongoose.c:7655:mg_close_conn  7 5 closed

@@ -1,0 +1,15 @@
+e8ba04 3 mongoose.c:7806:mg_mgr_init    MG_IO_SIZE: 16384, TLS: none
+e8ba04 3 mongoose.c:7719:mg_listen      1 4 http://0.0.0.0:9001
+Slave running on port 9001, database: slave1.db
+e92cb6 3 mongoose.c:14239:accept_conn   2 5 accepted 127.0.0.1:40812 -> 127.0.0.1:9001
+e92cb6 3 mongoose.c:14082:read_conn     2 5 0:0:0 111 err 0
+e92cb7 3 mongoose.c:14092:write_conn    2 5 snd 250/16384 rcv 0/16384 n=250 err=0
+e92cb7 3 mongoose.c:7655:mg_close_conn  2 5 closed
+e92cc3 3 mongoose.c:14239:accept_conn   3 5 accepted 127.0.0.1:40822 -> 127.0.0.1:9001
+e92cc3 3 mongoose.c:14082:read_conn     3 5 0:0:0 113 err 0
+e92cc3 3 mongoose.c:14092:write_conn    3 5 snd 124/16384 rcv 0/16384 n=124 err=0
+e92cc3 3 mongoose.c:7655:mg_close_conn  3 5 closed
+e92ccc 3 mongoose.c:14239:accept_conn   4 5 accepted 127.0.0.1:40836 -> 127.0.0.1:9001
+e92ccc 3 mongoose.c:14082:read_conn     4 5 0:0:0 119 err 0
+e92ccc 3 mongoose.c:14092:write_conn    4 5 snd 124/16384 rcv 0/16384 n=124 err=0
+e92ccc 3 mongoose.c:7655:mg_close_conn  4 5 closed
