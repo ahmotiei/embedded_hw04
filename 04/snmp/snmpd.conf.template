@@ -1,0 +1,17 @@
+# This file is converted to a node-specific snmpd.conf by
+# scripts/generate_snmpd_config.sh.
+
+agentaddress @SNMP_LISTEN_ADDRESS@
+
+# Restrict the community to the custom hotel sensor subtree.
+rocommunity @SNMP_COMMUNITY@ 127.0.0.1 @SNMP_BASE_OID@
+rocommunity @SNMP_COMMUNITY@ @SNMP_ALLOWED_NETWORK@ @SNMP_BASE_OID@
+
+sysLocation @SNMP_SYS_LOCATION@
+sysContact @SNMP_SYS_CONTACT@
+sysName @NODE_NAME@
+
+dontLogTCPWrappersConnects yes
+
+# Net-SNMP appends -g/-n/-s and the requested OID to this command.
+pass @SNMP_BASE_OID@ @HANDLER_PATH@ --db @DATABASE_PATH@ --node @NODE_NAME@ --base-oid @SNMP_BASE_OID@
