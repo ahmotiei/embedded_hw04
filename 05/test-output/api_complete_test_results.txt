@@ -1,0 +1,174 @@
+SECTION 05 - SENSOR LOG API TEST RESULTS
+Generated at: Tue Jul 21 09:53:04 PM UTC 2026
+
+========== PROCESS AND LISTEN ADDRESS ==========
+1299 /home/amir/05/api/sensor_log_api --listen http://0.0.0.0:8005 --db /home/amir/master/master.db
+LISTEN 0      128          0.0.0.0:8005       0.0.0.0:*    users:(("sensor_log_api",pid=1299,fd=4))
+
+========== HEALTH CHECK ==========
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 21         
+
+{
+  "status": "ok"
+}
+
+========== VALID TEMPERATURE REQUEST ==========
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 221        
+
+{
+  "sensor_name": "temperature",
+  "sensor_id": "101",
+  "date": "2026-06-01",
+  "values": [
+    {
+      "time": "10:00:00",
+      "value": "24.2"
+    },
+    {
+      "time": "10:15:00",
+      "value": "24.8"
+    }
+  ]
+}
+
+========== VALID HUMIDITY REQUEST ==========
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 214        
+
+{
+  "sensor_name": "humidity",
+  "sensor_id": "102",
+  "date": "2026-06-01",
+  "values": [
+    {
+      "time": "10:00:00",
+      "value": "44"
+    },
+    {
+      "time": "10:15:00",
+      "value": "45"
+    }
+  ]
+}
+
+========== VALID MOTION REQUEST ==========
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 210        
+
+{
+  "sensor_name": "motion",
+  "sensor_id": "103",
+  "date": "2026-06-01",
+  "values": [
+    {
+      "time": "10:10:00",
+      "value": "0"
+    },
+    {
+      "time": "10:16:00",
+      "value": "1"
+    }
+  ]
+}
+
+========== REQUEST USING STORED SENSOR NAME ==========
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 229        
+
+{
+  "sensor_name": "Floor1_Room101_Temp",
+  "sensor_id": "101",
+  "date": "2026-06-01",
+  "values": [
+    {
+      "time": "10:00:00",
+      "value": "24.2"
+    },
+    {
+      "time": "10:15:00",
+      "value": "24.8"
+    }
+  ]
+}
+
+========== NO DATA ==========
+HTTP/1.1 404 Not Found
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 161        
+
+{
+  "sensor_name": "temperature",
+  "sensor_id": "101",
+  "date": "2026-06-02",
+  "values": [],
+  "message": "No data found for the requested sensor and date"
+}
+
+========== SENSOR NAME AND ID MISMATCH ==========
+HTTP/1.1 404 Not Found
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 158        
+
+{
+  "sensor_name": "humidity",
+  "sensor_id": "101",
+  "date": "2026-06-01",
+  "values": [],
+  "message": "No data found for the requested sensor and date"
+}
+
+========== INVALID DATE ==========
+HTTP/1.1 400 Bad Request
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 55         
+
+{
+  "error": "date must be a valid YYYY-MM-DD value"
+}
+
+========== MISSING PARAMETER ==========
+HTTP/1.1 400 Bad Request
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 79         
+
+{
+  "error": "sensor_name, sensor_id and date query parameters are required"
+}
+
+========== UNKNOWN ROUTE ==========
+HTTP/1.1 404 Not Found
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Content-Length: 33         
+
+{
+  "error": "Route not found"
+}
+
+========== METHOD NOT ALLOWED ==========
+HTTP/1.1 405 Method Not Allowed
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+Allow: GET
+Content-Length: 48         
+
+{
+  "error": "Only the GET method is allowed"
+}
+
