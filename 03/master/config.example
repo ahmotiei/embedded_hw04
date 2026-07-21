@@ -1,0 +1,37 @@
+# Master HTTP API
+PORT=8000
+DATABASE=master.db
+
+# Timeout for communication with Slave nodes
+SLAVE_TIMEOUT_MS=3000
+
+# Separate virtual-machine mode
+SLAVE1_IP=192.168.122.18
+SLAVE1_PORT=9001
+
+SLAVE2_IP=192.168.122.190
+SLAVE2_PORT=9002
+
+# Master Memcached
+MEMCACHED_HOST=127.0.0.1
+MEMCACHED_PORT=11211
+CACHE_TTL=300
+
+# MQTT Broker
+MQTT_BROKER_HOST=127.0.0.1
+MQTT_BROKER_PORT=1883
+
+# MQTT client identity
+MQTT_CLIENT_ID=hotel-master
+
+# MQTT topics
+MQTT_REQUEST_TOPIC=hotel/sensors/request
+MQTT_RESPONSE_PREFIX=hotel/sensors/response
+
+# MQTT 3.1.1 with QoS 1
+MQTT_QOS=1
+MQTT_VERSION=4
+MQTT_KEEPALIVE=30
+
+# Delay before reconnecting after a connection failure
+MQTT_RECONNECT_MS=3000

@@ -1,0 +1,10 @@
+
+# Section 03 generated files
+03/**/*.o
+03/master/master
+03/slave1/slave1
+03/slave2/slave2
+03/**/*.db
+03/logs/*.log
+03/*.csv
+03/.~lock.*
