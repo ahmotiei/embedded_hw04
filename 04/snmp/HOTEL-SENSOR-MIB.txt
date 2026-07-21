@@ -1,0 +1,108 @@
+HOTEL-SENSOR-MIB DEFINITIONS ::= BEGIN
+
+-- Self-contained laboratory MIB. No external MIB modules are required.
+internet       OBJECT IDENTIFIER ::= { iso(1) org(3) dod(6) 1 }
+private        OBJECT IDENTIFIER ::= { internet 4 }
+enterprises    OBJECT IDENTIFIER ::= { private 1 }
+netSnmp        OBJECT IDENTIFIER ::= { enterprises 8072 }
+netSnmpPlaypen OBJECT IDENTIFIER ::= { netSnmp 9999 }
+hotelSensorMIB OBJECT IDENTIFIER ::= { netSnmpPlaypen 4 }
+
+hotelSensorCount OBJECT-TYPE
+    SYNTAX      INTEGER (0..2147483647)
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Number of active sensors in the local SQLite database."
+    ::= { hotelSensorMIB 1 }
+
+hotelSensorTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF HotelSensorEntry
+    ACCESS      not-accessible
+    STATUS      mandatory
+    DESCRIPTION "Latest stored data for every active sensor."
+    ::= { hotelSensorMIB 2 }
+
+hotelSensorEntry OBJECT-TYPE
+    SYNTAX      HotelSensorEntry
+    ACCESS      not-accessible
+    STATUS      mandatory
+    DESCRIPTION "One sensor and its latest stored reading."
+    INDEX       { hotelSensorIndex }
+    ::= { hotelSensorTable 1 }
+
+HotelSensorEntry ::= SEQUENCE {
+    hotelSensorIndex       INTEGER,
+    hotelSensorId          OCTET STRING,
+    hotelSensorName        OCTET STRING,
+    hotelSensorDescription OCTET STRING,
+    hotelSensorLatestValue OCTET STRING,
+    hotelSensorUnit        OCTET STRING,
+    hotelSensorRecordedAt  OCTET STRING,
+    hotelSensorType        OCTET STRING,
+    hotelSensorNodeName    OCTET STRING
+}
+
+hotelSensorIndex OBJECT-TYPE
+    SYNTAX      INTEGER (1..2147483647)
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Local row index used by the SNMP table."
+    ::= { hotelSensorEntry 1 }
+
+hotelSensorId OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Sensor identifier stored in SQLite."
+    ::= { hotelSensorEntry 2 }
+
+hotelSensorName OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Human-readable sensor name."
+    ::= { hotelSensorEntry 3 }
+
+hotelSensorDescription OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Sensor type, location, and owning node."
+    ::= { hotelSensorEntry 4 }
+
+hotelSensorLatestValue OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Latest value stored for the sensor."
+    ::= { hotelSensorEntry 5 }
+
+hotelSensorUnit OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Measurement unit."
+    ::= { hotelSensorEntry 6 }
+
+hotelSensorRecordedAt OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Timestamp of the latest stored reading."
+    ::= { hotelSensorEntry 7 }
+
+hotelSensorType OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Sensor type such as temperature or humidity."
+    ::= { hotelSensorEntry 8 }
+
+hotelSensorNodeName OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..255))
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION "Distributed database node that owns the sensor."
+    ::= { hotelSensorEntry 9 }
+
+END

@@ -1,0 +1,5 @@
+snmp/sensor_snmp_pass
+generated/*
+test-output/*
+*.log
+*.pid
