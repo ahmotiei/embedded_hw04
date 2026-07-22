@@ -1,0 +1,16 @@
+========== CLEAN BUILD ==========
+rm -f daemon/sensor_alert_daemon tests/source.db tests/alerts.db
+
+========== COMPILE ALERT DAEMON ==========
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic daemon/alert_daemon.cpp -lsqlite3 -pthread -o daemon/sensor_alert_daemon
+
+========== CREATED EXECUTABLE ==========
+-rwxrwxr-x 1 amir amir 96K Jul 22 00:36 daemon/sensor_alert_daemon
+
+========== EXECUTABLE TYPE ==========
+daemon/sensor_alert_daemon: ELF 64-bit LSB pie executable, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=99dabb585e7a935dc1e8b9cfdf90528090a002ad, for GNU/Linux 3.2.0, not stripped
+
+========== LINKED SQLITE LIBRARY ==========
+	libsqlite3.so.0 => /lib/x86_64-linux-gnu/libsqlite3.so.0 (0x00007f3c8023b000)
+	libstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f3c8000f000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f3c7ffef000)

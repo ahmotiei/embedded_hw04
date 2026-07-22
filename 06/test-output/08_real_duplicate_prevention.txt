@@ -1,0 +1,11 @@
+========== SECOND CYCLE ON SAME REAL READINGS ==========
+2026-07-22 00:49:28 [INFO] sensor alert daemon started
+2026-07-22 00:49:28 [INFO] alert database: /home/amir/06/data/alerts.db
+2026-07-22 00:49:28 [INFO] check interval: 5 seconds
+2026-07-22 00:49:28 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22 00:49:28 [INFO] sensor alert daemon stopped
+
+========== REAL DATABASE DUPLICATE CHECK ==========
+total_alerts  unique_alerts
+------------  -------------
+4             4            

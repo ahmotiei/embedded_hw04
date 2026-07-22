@@ -1,0 +1,18 @@
+========== REAL MASTER DATABASE - SINGLE CYCLE ==========
+make: Entering directory '/home/amir/06'
+rm -f daemon/sensor_alert_daemon tests/source.db tests/alerts.db
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic daemon/alert_daemon.cpp -lsqlite3 -pthread -o daemon/sensor_alert_daemon
+make: Leaving directory '/home/amir/06'
+wal
+Alert database initialized: /home/amir/06/data/alerts.db
+2026-07-22 00:47:50 [INFO] sensor alert daemon started
+2026-07-22 00:47:50 [INFO] alert database: /home/amir/06/data/alerts.db
+2026-07-22 00:47:50 [INFO] check interval: 5 seconds
+2026-07-22 00:47:50 [ALERT] STALE_DATA sensor_id=101 value=24.8 source=/home/amir/master/master.db
+2026-07-22 00:47:50 [ALERT] STALE_DATA sensor_id=102 value=45 source=/home/amir/master/master.db
+2026-07-22 00:47:50 [ALERT] STALE_DATA sensor_id=103 value=1 source=/home/amir/master/master.db
+2026-07-22 00:47:50 [ALERT] STALE_DATA sensor_id=104 value=23.9 source=/home/amir/master/master.db
+2026-07-22 00:47:50 [INFO] cycle complete: sensors=4 inserted=4 resolved=0
+2026-07-22 00:47:50 [INFO] sensor alert daemon stopped
+
+Exit code: 0

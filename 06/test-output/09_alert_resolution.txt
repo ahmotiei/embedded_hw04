@@ -1,0 +1,19 @@
+
+========== RESOLVE ACTIVE ALERTS ==========
+2026-07-22 00:53:42 [INFO] sensor alert daemon started
+2026-07-22 00:53:42 [INFO] alert database: tests/resolution_alerts.db
+2026-07-22 00:53:42 [INFO] check interval: 5 seconds
+2026-07-22 00:53:42 [INFO] cycle complete: sensors=3 inserted=0 resolved=3
+2026-07-22 00:53:42 [INFO] sensor alert daemon stopped
+
+========== RESOLVED ALERT STATUS ==========
+id  sensor_id  alert_type        sensor_value  status  
+--  ---------  ----------------  ------------  --------
+1   101        TEMPERATURE_HIGH  35.2          RESOLVED
+2   201        HUMIDITY_LOW      18.5          RESOLVED
+3   301        INVALID_VALUE     not-a-number  RESOLVED
+
+========== ALERT STATUS SUMMARY ==========
+status    alert_count
+--------  -----------
+RESOLVED  3          

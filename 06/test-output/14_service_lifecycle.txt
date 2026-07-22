@@ -1,0 +1,16 @@
+========== STOP SERVICE ==========
+PID before stop: 2538
+State after stop:
+inactive
+
+========== START SERVICE ==========
+State after start:
+active
+PID after start: 2562
+
+========== RESTART SERVICE ==========
+PID before restart: 2562
+PID after restart:  2575
+Final state:
+active
+OK: Stop, start and restart tests succeeded
