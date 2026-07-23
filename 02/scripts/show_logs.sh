@@ -2,20 +2,35 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LOG_DIR="$PROJECT_ROOT/logs"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-for log_name in master slave1 slave2; do
-    log_file="$LOG_DIR/$log_name.log"
+TARGET="${1:-all}"
+LINES="${LINES:-200}"
+
+show_one() {
+    local node="$1"
+    local log_file
+
+    validate_node "$node"
+    log_file="$LOG_DIR/$node.log"
 
     echo "============================================================"
-    echo "$log_name log"
+    echo "$node log: $log_file"
 
     if [[ -f "$log_file" ]]; then
-        cat "$log_file"
+        tail -n "$LINES" "$log_file"
     else
-        echo "Log file not found: $log_file"
+        echo "Log file not found. The node may have been run in foreground mode."
     fi
 
     echo
-done
+}
+
+if [[ "$TARGET" == "all" ]]; then
+    for node in master slave1 slave2; do
+        show_one "$node"
+    done
+else
+    show_one "$TARGET"
+fi

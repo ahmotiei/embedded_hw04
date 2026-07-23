@@ -1,13 +1,17 @@
+# Master HTTP server
 PORT=8000
 DATABASE=master.db
+
+# Timeout for each Master -> Slave HTTP request
 SLAVE_TIMEOUT_MS=3000
 
+# Separate-VM mode
 SLAVE1_IP=192.168.122.18
 SLAVE1_PORT=9001
-
 SLAVE2_IP=192.168.122.190
 SLAVE2_PORT=9002
 
+# Local Memcached on the Master VM
 MEMCACHED_HOST=127.0.0.1
 MEMCACHED_PORT=11211
 CACHE_TTL=300

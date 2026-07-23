@@ -21,6 +21,7 @@ The virtual machines are managed through SSH. Application-level communication is
 ```text
 02/
 ├── cache_speed_result.csv
+├── cache_speed_summary.csv
 ├── data/
 │   ├── master_sensors.csv
 │   ├── slave1_sensors.csv
@@ -47,10 +48,20 @@ The virtual machines are managed through SSH. Application-level communication is
 ├── report.md
 ├── scripts/
 │   ├── build_and_run.sh
+│   ├── build_node.sh
 │   ├── cache_speed_test.sh
 │   ├── check_databases.sh
+│   ├── clean_generated_files.sh
+│   ├── common.sh
+│   ├── flush_cache.sh
 │   ├── init_all_databases.sh
+│   ├── init_node_database.sh
+│   ├── install_dependencies.sh
+│   ├── run_master.sh
+│   ├── run_slave1.sh
+│   ├── run_slave2.sh
 │   ├── show_logs.sh
+│   ├── stop_node.sh
 │   └── test_requests.sh
 ├── slave1/
 │   ├── cache.cpp
@@ -74,13 +85,22 @@ The virtual machines are managed through SSH. Application-level communication is
 
 ## Required Packages
 
-Install the required packages on the Master, Slave1, and Slave2 virtual machines:
+Install the required packages on the Master, Slave1, and Slave2 virtual machines. The provided installation script installs the dependencies and enables Memcached:
+
+```bash
+bash scripts/install_dependencies.sh
+```
+
+The equivalent manual installation command is:
 
 ```bash
 sudo apt update
 sudo apt install -y \
     build-essential \
+    gcc \
     g++ \
+    make \
+    pkg-config \
     sqlite3 \
     libsqlite3-dev \
     memcached \
@@ -94,9 +114,9 @@ Memcached provides the in-memory cache service. `libmemcached-dev` provides the 
 
 ## Installing and Running Memcached
 
-Memcached must be installed and running on all three virtual machines.
+Memcached must be installed and running on all three virtual machines. The node startup scripts check the local Memcached endpoint and start the service automatically when it is installed but not running.
 
-Enable and start the service with:
+Memcached can also be enabled and started manually with:
 
 ```bash
 sudo systemctl enable memcached
@@ -129,21 +149,29 @@ A simple status test can be performed inside each VM:
 echo "stats" | nc -q 1 localhost 11211
 ```
 
-To clear the cache on a VM, run:
+To clear the cache of a node, run the matching command locally on that node's VM from the root of Section 2:
 
 ```bash
-echo "flush_all" | nc -q 1 localhost 11211
+bash scripts/flush_cache.sh master
+bash scripts/flush_cache.sh slave1
+bash scripts/flush_cache.sh slave2
 ```
 
-A successful cache flush returns:
-
-```text
-OK
-```
+For example, `flush_cache.sh slave1` must be executed on the Slave1 VM. A successful cache flush is reported by the script.
 
 ## Configuration Files
 
 Each node reads its runtime settings from a configuration file. IP addresses, ports, database paths, cache settings, and timeouts are not hard-coded in the source code.
+
+Before the first execution, copy each example file to the corresponding runtime configuration file:
+
+```bash
+cp master/config.example master/config
+cp slave1/config.example slave1/config
+cp slave2/config.example slave2/config
+```
+
+The real Slave IP addresses must then be set in `master/config`.
 
 A typical Master configuration is:
 
@@ -202,10 +230,18 @@ sensor:temperature:201
 
 The SQLite databases can be initialized from the CSV files in the `data/` directory.
 
-From the root of Section 2, run:
+From the root of Section 2, initialize all three databases with:
 
 ```bash
 bash scripts/init_all_databases.sh
+```
+
+A single node database can be initialized with:
+
+```bash
+bash scripts/init_node_database.sh master
+bash scripts/init_node_database.sh slave1
+bash scripts/init_node_database.sh slave2
 ```
 
 The databases can be checked with:
@@ -228,14 +264,15 @@ The `sensors` table stores sensor metadata. The `sensor_readings` table stores s
 
 Each node has its own Makefile. The applications must be compiled on their corresponding virtual machines.
 
+From the root of Section 2, the provided build script can compile a selected node:
+
 ### Compile Master
 
 On the Master VM:
 
 ```bash
-cd ~/master
-make clean
-make
+cd ~/embedded/embedded_hw04/02
+bash scripts/build_node.sh master
 ```
 
 The Master build compiles and links `main.cpp`, `http_client.cpp`, `cache.cpp`, and `mongoose.c` with SQLite and libmemcached.
@@ -245,9 +282,8 @@ The Master build compiles and links `main.cpp`, `http_client.cpp`, `cache.cpp`, 
 On the Slave1 VM:
 
 ```bash
-cd ~/slave1
-make clean
-make
+cd ~/embedded/embedded_hw04/02
+bash scripts/build_node.sh slave1
 ```
 
 ### Compile Slave2
@@ -255,9 +291,8 @@ make
 On the Slave2 VM:
 
 ```bash
-cd ~/slave2
-make clean
-make
+cd ~/embedded/embedded_hw04/02
+bash scripts/build_node.sh slave2
 ```
 
 A successful build creates these executables:
@@ -268,17 +303,21 @@ slave1/slave1
 slave2/slave2
 ```
 
+The `build_node.sh` script performs `make clean` before building. Use `--no-clean` only when a clean rebuild is not required.
+
 ## Running Master and Slave Nodes
 
-The three programs must be running at the same time.
+The three programs must be running at the same time. Run every command from the root of Section 2 on the VM named in the subsection.
+
+By default, each startup script initializes the node database from its CSV file, checks and starts the local Memcached service, flushes the local cache, performs a clean build, and runs the program in the foreground.
 
 ### Start Slave1
 
 On the Slave1 VM:
 
 ```bash
-cd ~/slave1
-./slave1 config
+cd ~/embedded/embedded_hw04/02
+bash scripts/run_slave1.sh
 ```
 
 Expected startup output includes:
@@ -292,8 +331,8 @@ Slave running on port 9001, database: slave1.db, cache: enabled
 On the Slave2 VM:
 
 ```bash
-cd ~/slave2
-./slave2 config
+cd ~/embedded/embedded_hw04/02
+bash scripts/run_slave2.sh
 ```
 
 Expected startup output includes:
@@ -307,8 +346,8 @@ Slave running on port 9002, database: slave2.db, cache: enabled
 On the Master VM:
 
 ```bash
-cd ~/master
-./master config
+cd ~/embedded/embedded_hw04/02
+bash scripts/run_master.sh
 ```
 
 Expected startup output includes:
@@ -320,7 +359,21 @@ Slave1: 192.168.122.18:9001
 Slave2: 192.168.122.190:9002
 ```
 
-The terminal running each server must remain open while tests are performed.
+The terminal running each server must remain open while tests are performed. To run a node in the background, add `--background`:
+
+```bash
+bash scripts/run_master.sh --background
+```
+
+Background processes can be stopped with:
+
+```bash
+bash scripts/stop_node.sh master
+bash scripts/stop_node.sh slave1
+bash scripts/stop_node.sh slave2
+```
+
+The startup scripts also support `--no-init`, `--no-clean`, and `--no-flush` when the corresponding default step must be skipped.
 
 ## Sending Requests
 
@@ -429,64 +482,69 @@ The speed test script is located at:
 scripts/cache_speed_test.sh
 ```
 
-The script sends requests for all 12 sensors in two rounds.
-
-The tested sensors are:
+The script reads every unique sensor dynamically from these files:
 
 ```text
-Master:
-101 temperature
-102 humidity
-103 motion
-104 temperature
-
-Slave1:
-201 temperature
-202 humidity
-203 motion
-204 co2
-
-Slave2:
-301 temperature
-302 humidity
-303 motion
-304 smoke
+data/master_sensors.csv
+data/slave1_sensors.csv
+data/slave2_sensors.csv
 ```
 
-Before running the benchmark, make sure that Master, Slave1, and Slave2 are running.
+Therefore, no sensor ID, sensor type, Master IP address, or HTTP port is fixed inside the benchmark script. Before running the benchmark, make sure that Master, Slave1, and Slave2 are running.
 
-Because the Master Memcached service listens only on `127.0.0.1`, the cache must be cleared from inside the Master VM before the benchmark.
-
-On the Master VM, run:
-
-```bash
-echo "flush_all" | nc -q 1 localhost 11211
-```
-
-Then run the benchmark from the host system:
+The benchmark is normally executed on the Master VM. By default, it connects to `127.0.0.1` and reads the HTTP port from `master/config`:
 
 ```bash
 cd ~/embedded/embedded_hw04/02
 bash scripts/cache_speed_test.sh
 ```
 
-The script sends all requests to:
+The script automatically flushes the Master cache before round 1. For a fully cold distributed test, first run the matching command locally on each VM:
 
-```text
-http://192.168.122.22:8000/api/sensor
+On the Master VM:
+
+```bash
+bash scripts/flush_cache.sh master
 ```
 
-The results are saved in:
+On the Slave1 VM:
+
+```bash
+bash scripts/flush_cache.sh slave1
+```
+
+On the Slave2 VM:
+
+```bash
+bash scripts/flush_cache.sh slave2
+```
+
+Then run the benchmark on the Master VM without another automatic flush:
+
+```bash
+bash scripts/cache_speed_test.sh --no-flush
+```
+
+When the test is executed from another machine, the Master address and port can be supplied without modifying the script:
+
+```bash
+bash scripts/cache_speed_test.sh --host 192.168.122.22 --port 8000
+```
+
+The detailed and summary results are saved in:
 
 ```text
 cache_speed_result.csv
+cache_speed_summary.csv
 ```
 
-The CSV file has this format:
+The detailed CSV file has this format:
 
 ```text
-round,sensor_id,sensor_type,source,response_time_us
+round,expected_node,sensor_id,sensor_type,http_status,source,server_response_time_us,client_total_time_us,value,recorded_at,error
 ```
+
+The summary CSV contains the number of successful requests, cache hits, mean, median, minimum, and maximum server response times, and the mean client-side total time for each round.
 
 ## Benchmark Method
 
@@ -494,20 +552,20 @@ round,sensor_id,sensor_type,source,response_time_us
 
 The Master cache is cleared before the benchmark. During the first round:
 
-- Sensors `101` to `104` are read from the Master SQLite database.
-- Sensors `201` to `204` are obtained through Slave1.
-- Sensors `301` to `304` are obtained through Slave2.
+- Sensors owned by the Master are read from the Master SQLite database.
+- Sensors owned by Slave1 are obtained through Slave1.
+- Sensors owned by Slave2 are obtained through Slave2.
 - Every successful result is stored in the Master cache.
 
 ### Round 2 — Cache Hit
 
-The same requests are sent again without clearing the cache. During this round:
+The same dynamically discovered requests are sent again without clearing the cache. During this round:
 
 - The Master checks its Memcached instance first.
 - All previously retrieved values are returned from the Master cache.
 - SQLite and the Slave nodes are not accessed again for cached items.
 
-If a sensor is not returned from cache in the second round, possible causes include an unsuccessful first request, an incorrect sensor type or ID, cache expiration, a Memcached restart, a manual cache flush, or a failed cache insertion.
+If a sensor is not returned from cache in the second round, possible causes include an unsuccessful first request, an incorrect sensor type or ID in the input CSV files, cache expiration, a Memcached restart, a manual cache flush, or a failed cache insertion. In strict mode, the script exits with an error if a successful round-2 response is not served from cache. The `--no-strict` option disables this final failure condition while still recording the result.
 
 ## Benchmark Results
 
@@ -562,22 +620,38 @@ logs/slave1.log
 logs/slave2.log
 ```
 
-Logs can be displayed with:
+Logs created by background execution can be displayed with:
 
 ```bash
 bash scripts/show_logs.sh
 ```
 
-Manual request tests can be performed with:
+A single node log can be displayed by passing its name:
+
+```bash
+bash scripts/show_logs.sh master
+```
+
+Functional request tests can be performed on the Master VM with:
 
 ```bash
 bash scripts/test_requests.sh
 ```
 
-The complete build and execution workflow is provided in:
+The test script chooses suitable sensors dynamically from the CSV files, verifies the original Master, Slave1, and Slave2 lookup paths, repeats each request to verify the Master cache, and checks the expected HTTP errors.
 
-```text
-scripts/build_and_run.sh
+The complete build and execution workflow for a selected node is provided by:
+
+```bash
+bash scripts/build_and_run.sh master
+bash scripts/build_and_run.sh slave1
+bash scripts/build_and_run.sh slave2
+```
+
+The local cache of a selected node can be cleared with `flush_cache.sh`, background nodes can be stopped with `stop_node.sh`, and generated build, PID, log, benchmark, and editor-temporary files can be removed with:
+
+```bash
+bash scripts/clean_generated_files.sh
 ```
 
 ## Summary
