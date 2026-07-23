@@ -1,5 +1,5 @@
-# Slave HTTP server
 PORT=9002
-
-# SQLite database created from the instructor CSV data
 DATABASE=slave2.db
+MEMCACHED_HOST=127.0.0.1
+MEMCACHED_PORT=11211
+CACHE_TTL=300

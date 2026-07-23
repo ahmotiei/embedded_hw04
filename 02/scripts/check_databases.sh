@@ -2,24 +2,28 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-databases=(
-    "$PROJECT_ROOT/master/master.db"
-    "$PROJECT_ROOT/slave1/slave1.db"
-    "$PROJECT_ROOT/slave2/slave2.db"
-)
+TARGET="${1:-all}"
+require_command sqlite3
 
-for db in "${databases[@]}"; do
-    if [[ ! -f "$db" ]]; then
-        echo "Error: database not found: $db"
-        exit 1
-    fi
+check_one() {
+    local node="$1"
+    local db
+
+    validate_node "$node"
+    db="$(node_database_path "$node")"
+    [[ -f "$db" ]] || die "database not found: $db"
 
     echo "============================================================"
+    echo "Node: $node"
     echo "Database: $db"
 
-    sqlite3 -header -column "$db" <<'EOF'
+    sqlite3 -header -column "$db" <<'SQL'
+PRAGMA foreign_keys;
+PRAGMA integrity_check;
+
 SELECT node_name, node_role FROM node_info;
 SELECT COUNT(*) AS sensors_count FROM sensors;
 SELECT COUNT(*) AS readings_count FROM sensor_readings;
@@ -43,7 +47,14 @@ WHERE r.id = (
     LIMIT 1
 )
 ORDER BY s.sensor_id;
-EOF
-
+SQL
     echo
-done
+}
+
+if [[ "$TARGET" == "all" ]]; then
+    for node in master slave1 slave2; do
+        check_one "$node"
+    done
+else
+    check_one "$TARGET"
+fi

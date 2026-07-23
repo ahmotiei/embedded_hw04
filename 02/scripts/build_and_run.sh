@@ -2,116 +2,130 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LOG_DIR="$PROJECT_ROOT/logs"
-PID_FILE="$LOG_DIR/nodes.pid"
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-mkdir -p "$LOG_DIR"
+usage() {
+    cat <<USAGE
+Usage:
+  $0 <master|slave1|slave2> [options]
 
-required_commands=(make g++ gcc sqlite3 curl stdbuf)
-
-for command_name in "${required_commands[@]}"; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-        echo "Error: required command is not installed: $command_name"
-        exit 1
-    fi
-done
-
-cleanup() {
-    local exit_code=$?
-
-    if [[ -f "$PID_FILE" ]]; then
-        while read -r pid; do
-            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-                kill "$pid" 2>/dev/null || true
-            fi
-        done < "$PID_FILE"
-
-        rm -f "$PID_FILE"
-    fi
-
-    wait 2>/dev/null || true
-    exit "$exit_code"
+Options:
+  --background    Run the node in the background and write PID/log files.
+  --foreground    Run the node in the foreground (default).
+  --no-init       Do not recreate the SQLite database.
+  --no-clean      Do not run make clean before building.
+  --no-flush      Do not flush this node's Memcached cache before startup.
+USAGE
 }
 
-trap cleanup EXIT INT TERM
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
 
-echo "Step 1/3: Initializing databases from CSV files..."
-"$PROJECT_ROOT/scripts/init_all_databases.sh"
+NODE="${1:-}"
+[[ -n "$NODE" ]] || {
+    usage
+    exit 1
+}
+shift
+validate_node "$NODE"
 
-echo
-echo "Step 2/3: Compiling Master and Slave programs with Make..."
+RUN_MODE="foreground"
+DO_INIT=1
+DO_CLEAN=1
+DO_FLUSH=1
 
-for node in master slave1 slave2; do
-    echo
-    echo "Building $node..."
-    make -C "$PROJECT_ROOT/$node" clean
-    make -C "$PROJECT_ROOT/$node"
-done
+while (( $# > 0 )); do
+    case "$1" in
+        --background) RUN_MODE="background" ;;
+        --foreground) RUN_MODE="foreground" ;;
+        --no-init) DO_INIT=0 ;;
+        --no-clean) DO_CLEAN=0 ;;
+        --no-flush) DO_FLUSH=0 ;;
+        -h|--help) usage; exit 0 ;;
+        *) die "unknown option: $1" ;;
+    esac
+    shift
+ done
 
-echo
-echo "Step 3/3: Starting distributed database nodes..."
+NODE_DIR="$(node_directory "$NODE")"
+CONFIG_FILE="$(node_config_path "$NODE")"
+BINARY="$NODE_DIR/$(node_binary_name "$NODE")"
+LOG_FILE="$LOG_DIR/$NODE.log"
+PID_FILE="$RUN_DIR/$NODE.pid"
 
-: > "$LOG_DIR/master.log"
-: > "$LOG_DIR/slave1.log"
-: > "$LOG_DIR/slave2.log"
-: > "$PID_FILE"
+[[ -f "$CONFIG_FILE" ]] || \
+    die "config file not found: $CONFIG_FILE. Copy config.example to config and set the real values."
 
-(
-    cd "$PROJECT_ROOT/slave1"
-    exec stdbuf -oL -eL ./slave1 config
-) > "$LOG_DIR/slave1.log" 2>&1 &
-SLAVE1_PID=$!
-echo "$SLAVE1_PID" >> "$PID_FILE"
+PORT="$(require_config_value "$CONFIG_FILE" PORT)"
+require_config_value "$CONFIG_FILE" DATABASE >/dev/null
+require_config_value "$CONFIG_FILE" MEMCACHED_HOST >/dev/null
+require_config_value "$CONFIG_FILE" MEMCACHED_PORT >/dev/null
+require_config_value "$CONFIG_FILE" CACHE_TTL >/dev/null
 
-(
-    cd "$PROJECT_ROOT/slave2"
-    exec stdbuf -oL -eL ./slave2 config
-) > "$LOG_DIR/slave2.log" 2>&1 &
-SLAVE2_PID=$!
-echo "$SLAVE2_PID" >> "$PID_FILE"
+if [[ "$NODE" == "master" ]]; then
+    require_config_value "$CONFIG_FILE" SLAVE1_PORT >/dev/null
+    require_config_value "$CONFIG_FILE" SLAVE2_PORT >/dev/null
 
-sleep 1
+    SHARED_SLAVE_IP="$(read_config_value "$CONFIG_FILE" SLAVE_IP || true)"
+    SLAVE1_IP="$(read_config_value "$CONFIG_FILE" SLAVE1_IP || true)"
+    SLAVE2_IP="$(read_config_value "$CONFIG_FILE" SLAVE2_IP || true)"
 
-(
-    cd "$PROJECT_ROOT/master"
-    exec stdbuf -oL -eL ./master config
-) > "$LOG_DIR/master.log" 2>&1 &
-MASTER_PID=$!
-echo "$MASTER_PID" >> "$PID_FILE"
-
-sleep 1
-
-for entry in \
-    "Master:$MASTER_PID:$LOG_DIR/master.log" \
-    "Slave1:$SLAVE1_PID:$LOG_DIR/slave1.log" \
-    "Slave2:$SLAVE2_PID:$LOG_DIR/slave2.log"; do
-
-    IFS=':' read -r name pid log_file <<< "$entry"
-
-    if ! kill -0 "$pid" 2>/dev/null; then
-        echo "Error: $name failed to start."
-        echo "Log output:"
-        cat "$log_file"
-        exit 1
+    if [[ -z "$SHARED_SLAVE_IP" && ( -z "$SLAVE1_IP" || -z "$SLAVE2_IP" ) ]]; then
+        die "Master config must define SLAVE_IP or both SLAVE1_IP and SLAVE2_IP"
     fi
-done
+fi
 
-echo
-echo "All nodes started successfully."
-echo "Master PID: $MASTER_PID"
-echo "Slave1 PID: $SLAVE1_PID"
-echo "Slave2 PID: $SLAVE2_PID"
-echo
-echo "Logs:"
-echo "  $LOG_DIR/master.log"
-echo "  $LOG_DIR/slave1.log"
-echo "  $LOG_DIR/slave2.log"
-echo
-echo "Run the test script in another terminal:"
-echo "  cd $PROJECT_ROOT"
-echo "  ./scripts/test_requests.sh"
-echo
-echo "Press Ctrl+C here to stop all nodes."
+if (( DO_INIT )); then
+    "$SCRIPT_DIR/init_node_database.sh" "$NODE"
+fi
 
-wait
+ensure_memcached_for_node "$NODE"
+
+if (( DO_FLUSH )); then
+    "$SCRIPT_DIR/flush_cache.sh" "$NODE"
+fi
+
+if (( DO_CLEAN )); then
+    "$SCRIPT_DIR/build_node.sh" "$NODE"
+else
+    "$SCRIPT_DIR/build_node.sh" "$NODE" --no-clean
+fi
+
+if [[ -f "$PID_FILE" ]]; then
+    OLD_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+    if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+        die "$NODE is already running with PID $OLD_PID. Stop it with scripts/stop_node.sh $NODE"
+    fi
+    rm -f "$PID_FILE"
+fi
+
+info "Starting $NODE on port $PORT"
+
+if [[ "$RUN_MODE" == "background" ]]; then
+    : > "$LOG_FILE"
+    (
+        cd "$NODE_DIR"
+        exec stdbuf -oL -eL "$BINARY" "$CONFIG_FILE"
+    ) >>"$LOG_FILE" 2>&1 &
+
+    NODE_PID=$!
+    echo "$NODE_PID" > "$PID_FILE"
+
+    sleep 1
+    if ! kill -0 "$NODE_PID" 2>/dev/null; then
+        echo "----- $NODE log -----" >&2
+        cat "$LOG_FILE" >&2 || true
+        rm -f "$PID_FILE"
+        die "$NODE failed to start"
+    fi
+
+    info "$NODE started successfully in the background"
+    echo "PID: $NODE_PID"
+    echo "Log: $LOG_FILE"
+else
+    cd "$NODE_DIR"
+    exec "$BINARY" "$CONFIG_FILE"
+fi
