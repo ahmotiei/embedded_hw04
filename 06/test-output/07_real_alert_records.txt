@@ -1,0 +1,10 @@
+========== REAL ALERT DATABASE FILE ==========
+-rw-r--r-- 1 amir amir 24K Jul 22 00:47 data/alerts.db
+
+========== REGISTERED REAL ALERTS ==========
+id  sensor_id  sensor_name              alert_type  sensor_value  source_recorded_at   created_at           status
+--  ---------  -----------------------  ----------  ------------  -------------------  -------------------  ------
+1   101        Floor1_Room101_Temp      STALE_DATA  24.8          2026-06-01 10:15:00  2026-07-22 00:47:50  OPEN  
+2   102        Floor1_Room101_Humidity  STALE_DATA  45            2026-06-01 10:15:00  2026-07-22 00:47:50  OPEN  
+3   103        Floor1_Corridor_Motion   STALE_DATA  1             2026-06-01 10:16:00  2026-07-22 00:47:50  OPEN  
+4   104        Floor1_Lobby_Temp        STALE_DATA  23.9          2026-06-01 10:20:00  2026-07-22 00:47:50  OPEN  

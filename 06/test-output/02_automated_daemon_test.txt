@@ -1,0 +1,17 @@
+========== AUTOMATED DAEMON TEST ==========
+./scripts/test_daemon.sh
+Created daemon test database: /home/amir/06/tests/source.db
+2026-07-22 00:36:42 [INFO] sensor alert daemon started
+2026-07-22 00:36:42 [INFO] alert database: /home/amir/06/tests/alerts.db
+2026-07-22 00:36:42 [INFO] check interval: 5 seconds
+2026-07-22 00:36:42 [ALERT] TEMPERATURE_HIGH sensor_id=101 value=35.2 source=/home/amir/06/tests/source.db
+2026-07-22 00:36:42 [ALERT] HUMIDITY_LOW sensor_id=201 value=18.5 source=/home/amir/06/tests/source.db
+2026-07-22 00:36:42 [ALERT] INVALID_VALUE sensor_id=301 value=not-a-number source=/home/amir/06/tests/source.db
+2026-07-22 00:36:42 [INFO] cycle complete: sensors=3 inserted=3 resolved=0
+2026-07-22 00:36:42 [INFO] sensor alert daemon stopped
+sensor_id  sensor_name          alert_type        sensor_value  status
+---------  -------------------  ----------------  ------------  ------
+101        temperature          TEMPERATURE_HIGH  35.2          OPEN  
+201        humidity             HUMIDITY_LOW      18.5          OPEN  
+301        temperature-invalid  INVALID_VALUE     not-a-number  OPEN  
+PASS: daemon alert test succeeded.

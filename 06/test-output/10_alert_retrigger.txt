@@ -1,0 +1,21 @@
+========== ALERT RE-TRIGGER TEST ==========
+2026-07-22 00:55:52 [INFO] sensor alert daemon started
+2026-07-22 00:55:52 [INFO] alert database: tests/resolution_alerts.db
+2026-07-22 00:55:52 [INFO] check interval: 5 seconds
+2026-07-22 00:55:52 [ALERT] TEMPERATURE_HIGH sensor_id=101 value=36.0 source=tests/resolution_source.db
+2026-07-22 00:55:52 [INFO] cycle complete: sensors=3 inserted=1 resolved=0
+2026-07-22 00:55:52 [INFO] sensor alert daemon stopped
+
+========== COMPLETE ALERT HISTORY ==========
+id  sensor_id  alert_type        sensor_value  source_recorded_at   status  
+--  ---------  ----------------  ------------  -------------------  --------
+1   101        TEMPERATURE_HIGH  35.2          2026-07-22 00:51:42  RESOLVED
+2   201        HUMIDITY_LOW      18.5          2026-07-22 00:51:42  RESOLVED
+3   301        INVALID_VALUE     not-a-number  2026-07-22 00:51:42  RESOLVED
+4   101        TEMPERATURE_HIGH  36.0          2026-07-22 00:55:44  OPEN    
+
+========== FINAL ALERT STATUS SUMMARY ==========
+status    alert_count
+--------  -----------
+OPEN      1          
+RESOLVED  3          

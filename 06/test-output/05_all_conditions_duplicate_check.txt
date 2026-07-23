@@ -1,0 +1,11 @@
+========== SECOND RUN ON SAME READINGS ==========
+2026-07-22 00:45:55 [INFO] sensor alert daemon started
+2026-07-22 00:45:55 [INFO] alert database: tests/all_conditions_alerts.db
+2026-07-22 00:45:55 [INFO] check interval: 5 seconds
+2026-07-22 00:45:55 [INFO] cycle complete: sensors=8 inserted=0 resolved=0
+2026-07-22 00:45:55 [INFO] sensor alert daemon stopped
+
+========== DUPLICATE PREVENTION RESULT ==========
+total_alerts  unique_alerts
+------------  -------------
+7             7            

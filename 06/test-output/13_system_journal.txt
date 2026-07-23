@@ -1,0 +1,41 @@
+========== SENSOR ALERT SYSTEM JOURNAL ==========
+2026-07-22T00:56:54+0000 embedded-master systemd[1]: Started Hotel Sensor Alert Daemon.
+2026-07-22T00:56:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:54 [INFO] sensor alert daemon started
+2026-07-22T00:56:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:54 [INFO] alert database: /home/amir/06/data/alerts.db
+2026-07-22T00:56:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:54 [INFO] check interval: 5 seconds
+2026-07-22T00:56:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:54 [ALERT] STALE_DATA sensor_id=101 value=24.8 source=/home/amir/master/master.db
+2026-07-22T00:56:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:54 [ALERT] STALE_DATA sensor_id=102 value=45 source=/home/amir/master/master.db
+2026-07-22T00:56:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:54 [ALERT] STALE_DATA sensor_id=103 value=1 source=/home/amir/master/master.db
+2026-07-22T00:56:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:54 [ALERT] STALE_DATA sensor_id=104 value=23.9 source=/home/amir/master/master.db
+2026-07-22T00:56:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:54 [INFO] cycle complete: sensors=4 inserted=4 resolved=0
+2026-07-22T00:56:59+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:56:59 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:04+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:04 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:09+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:09 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:14+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:14 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:19+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:19 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:24+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:24 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:29+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:29 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:34+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:34 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:39+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:39 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:44+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:44 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:49+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:49 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:54 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:57:59+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:57:59 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:04+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:04 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:09+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:09 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:14+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:14 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:19+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:19 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:24+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:24 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:29+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:29 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:34+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:34 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:39+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:39 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:44+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:44 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:49+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:49 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:54+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:54 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:58:59+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:58:59 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:59:04+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:59:04 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:59:09+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:59:09 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:59:14+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:59:14 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:59:19+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:59:19 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:59:24+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:59:24 [INFO] cycle complete: sensors=4 inserted=0 resolved=0
+2026-07-22T00:59:29+0000 embedded-master run_daemon.sh[2473]: 2026-07-22 00:59:29 [INFO] cycle complete: sensors=4 inserted=0 resolved=0

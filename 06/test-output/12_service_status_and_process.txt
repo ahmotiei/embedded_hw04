@@ -1,0 +1,18 @@
+========== SERVICE ENABLEMENT ==========
+enabled
+
+========== SERVICE ACTIVITY ==========
+active
+
+========== SERVICE INTERNAL STATE ==========
+MainPID=2473
+ExecMainStatus=0
+User=amir
+LoadState=loaded
+ActiveState=active
+SubState=running
+
+========== SYSTEMD MAIN PROCESS ==========
+Main PID: 2473
+    PID    PPID USER     GROUP        ELAPSED COMMAND         COMMAND
+   2473       1 amir     amir           01:33 sensor_alert_da /home/amir/06/daemon/sensor_alert_daemon --alert-db /home/amir/06/data/alerts.db --rules /home/amir/06/config/alert_rules.conf --source-db /home/amir/master/master.db --interval 5

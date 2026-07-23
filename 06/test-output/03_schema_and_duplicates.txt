@@ -1,0 +1,32 @@
+========== ALERT TABLE COLUMNS ==========
+cid  name                type     notnull  dflt_value  pk
+---  ------------------  -------  -------  ----------  --
+0    id                  INTEGER  0                    1 
+1    sensor_id           TEXT     1                    0 
+2    sensor_name         TEXT     1                    0 
+3    alert_type          TEXT     1                    0 
+4    sensor_value        TEXT     1                    0 
+5    created_at          TEXT     1                    0 
+6    status              TEXT     1                    0 
+7    source_recorded_at  TEXT     1                    0 
+8    source_db           TEXT     1                    0 
+9    details             TEXT     1                    0 
+
+========== ALERT DATABASE INDEXES ==========
+seq  name                       unique  origin  partial
+---  -------------------------  ------  ------  -------
+0    idx_alerts_sensor          0       c       0      
+1    idx_alerts_status_created  0       c       0      
+2    sqlite_autoindex_alerts_1  1       u       0      
+
+========== REGISTERED ALERTS ==========
+id  sensor_id  sensor_name          alert_type        sensor_value  created_at           status
+--  ---------  -------------------  ----------------  ------------  -------------------  ------
+1   101        temperature          TEMPERATURE_HIGH  35.2          2026-07-22 00:36:42  OPEN  
+2   201        humidity             HUMIDITY_LOW      18.5          2026-07-22 00:36:42  OPEN  
+3   301        temperature-invalid  INVALID_VALUE     not-a-number  2026-07-22 00:36:42  OPEN  
+
+========== DUPLICATE PREVENTION CHECK ==========
+total_alerts  unique_alerts
+------------  -------------
+3             3            

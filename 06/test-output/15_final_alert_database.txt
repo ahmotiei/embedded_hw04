@@ -1,0 +1,22 @@
+========== FINAL ALERT DATABASE FILE ==========
+-rw-r--r-- 1 amir amir  24K Jul 22 01:01 data/alerts.db
+-rw-r--r-- 1 amir amir  32K Jul 22 01:01 data/alerts.db-shm
+-rw-r--r-- 1 amir amir 194K Jul 22 01:01 data/alerts.db-wal
+
+========== FINAL REGISTERED ALERTS ==========
+id  sensor_id  sensor_name              alert_type  sensor_value  created_at           status
+--  ---------  -----------------------  ----------  ------------  -------------------  ------
+1   101        Floor1_Room101_Temp      STALE_DATA  24.8          2026-07-22 00:56:54  OPEN  
+2   102        Floor1_Room101_Humidity  STALE_DATA  45            2026-07-22 00:56:54  OPEN  
+3   103        Floor1_Corridor_Motion   STALE_DATA  1             2026-07-22 00:56:54  OPEN  
+4   104        Floor1_Lobby_Temp        STALE_DATA  23.9          2026-07-22 00:56:54  OPEN  
+
+========== FINAL ALERT STATUS SUMMARY ==========
+alert_type  status  alert_count
+----------  ------  -----------
+STALE_DATA  OPEN    4          
+
+========== FINAL DUPLICATE CHECK ==========
+total_alerts  unique_alerts
+------------  -------------
+4             4            

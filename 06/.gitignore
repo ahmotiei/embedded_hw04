@@ -1,0 +1,4 @@
+daemon/sensor_alert_daemon
+service/sensor-alert.service
+tests/*.db
+data/*.db*

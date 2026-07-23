@@ -1,0 +1,13 @@
+========== RUN ALL ALERT CONDITIONS ==========
+2026-07-22 00:42:01 [INFO] sensor alert daemon started
+2026-07-22 00:42:01 [INFO] alert database: tests/all_conditions_alerts.db
+2026-07-22 00:42:01 [INFO] check interval: 5 seconds
+2026-07-22 00:42:01 [ALERT] TEMPERATURE_HIGH sensor_id=401 value=35.5 source=tests/all_conditions_source.db
+2026-07-22 00:42:01 [ALERT] HUMIDITY_LOW sensor_id=402 value=20.0 source=tests/all_conditions_source.db
+2026-07-22 00:42:01 [ALERT] HUMIDITY_HIGH sensor_id=403 value=85.0 source=tests/all_conditions_source.db
+2026-07-22 00:42:01 [ALERT] INVALID_VALUE sensor_id=404 value=150.0 source=tests/all_conditions_source.db
+2026-07-22 00:42:01 [ALERT] INVALID_VALUE sensor_id=405 value=-5.0 source=tests/all_conditions_source.db
+2026-07-22 00:42:01 [ALERT] INVALID_VALUE sensor_id=406 value=not-a-number source=tests/all_conditions_source.db
+2026-07-22 00:42:01 [ALERT] STALE_DATA sensor_id=407 value=1 source=tests/all_conditions_source.db
+2026-07-22 00:42:01 [INFO] cycle complete: sensors=8 inserted=7 resolved=0
+2026-07-22 00:42:01 [INFO] sensor alert daemon stopped
