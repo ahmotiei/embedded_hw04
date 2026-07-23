@@ -3,115 +3,123 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LOG_DIR="$PROJECT_ROOT/logs"
-PID_FILE="$LOG_DIR/nodes.pid"
+NODE="${1:-}"
+CONFIG_FILE="${2:-}"
+DATA_DIR="${DATA_DIR:-$PROJECT_ROOT/data}"
 
-mkdir -p "$LOG_DIR"
+usage() {
+    cat <<'EOF_USAGE'
+Usage:
+  ./scripts/build_and_run.sh master [config-file]
+  ./scripts/build_and_run.sh slave1 [config-file]
+  ./scripts/build_and_run.sh slave2 [config-file]
 
-required_commands=(make g++ gcc sqlite3 curl stdbuf)
-
-for command_name in "${required_commands[@]}"; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-        echo "Error: required command is not installed: $command_name"
-        exit 1
-    fi
-done
-
-cleanup() {
-    local exit_code=$?
-
-    if [[ -f "$PID_FILE" ]]; then
-        while read -r pid; do
-            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-                kill "$pid" 2>/dev/null || true
-            fi
-        done < "$PID_FILE"
-
-        rm -f "$PID_FILE"
-    fi
-
-    wait 2>/dev/null || true
-    exit "$exit_code"
+Run this script inside the corresponding VM. It initializes that node's
+database, compiles it with Makefile, validates required local services,
+and starts the program in the foreground.
+EOF_USAGE
 }
 
-trap cleanup EXIT INT TERM
+if [[ "$NODE" != "master" && "$NODE" != "slave1" && "$NODE" != "slave2" ]]; then
+    usage
+    exit 2
+fi
 
-echo "Step 1/3: Initializing databases from CSV files..."
-"$PROJECT_ROOT/scripts/init_all_databases.sh"
+CONFIG_FILE="${CONFIG_FILE:-$PROJECT_ROOT/$NODE/config}"
 
-echo
-echo "Step 2/3: Compiling Master and Slave programs with Make..."
-
-for node in master slave1 slave2; do
-    echo
-    echo "Building $node..."
-    make -C "$PROJECT_ROOT/$node" clean
-    make -C "$PROJECT_ROOT/$node"
-done
-
-echo
-echo "Step 3/3: Starting distributed database nodes..."
-
-: > "$LOG_DIR/master.log"
-: > "$LOG_DIR/slave1.log"
-: > "$LOG_DIR/slave2.log"
-: > "$PID_FILE"
-
-(
-    cd "$PROJECT_ROOT/slave1"
-    exec stdbuf -oL -eL ./slave1 config
-) > "$LOG_DIR/slave1.log" 2>&1 &
-SLAVE1_PID=$!
-echo "$SLAVE1_PID" >> "$PID_FILE"
-
-(
-    cd "$PROJECT_ROOT/slave2"
-    exec stdbuf -oL -eL ./slave2 config
-) > "$LOG_DIR/slave2.log" 2>&1 &
-SLAVE2_PID=$!
-echo "$SLAVE2_PID" >> "$PID_FILE"
-
-sleep 1
-
-(
-    cd "$PROJECT_ROOT/master"
-    exec stdbuf -oL -eL ./master config
-) > "$LOG_DIR/master.log" 2>&1 &
-MASTER_PID=$!
-echo "$MASTER_PID" >> "$PID_FILE"
-
-sleep 1
-
-for entry in \
-    "Master:$MASTER_PID:$LOG_DIR/master.log" \
-    "Slave1:$SLAVE1_PID:$LOG_DIR/slave1.log" \
-    "Slave2:$SLAVE2_PID:$LOG_DIR/slave2.log"; do
-
-    IFS=':' read -r name pid log_file <<< "$entry"
-
-    if ! kill -0 "$pid" 2>/dev/null; then
-        echo "Error: $name failed to start."
-        echo "Log output:"
-        cat "$log_file"
+for command_name in make sqlite3 g++ gcc; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+        echo "Error: required command is not installed: $command_name" >&2
         exit 1
-    fi
+    }
 done
 
-echo
-echo "All nodes started successfully."
-echo "Master PID: $MASTER_PID"
-echo "Slave1 PID: $SLAVE1_PID"
-echo "Slave2 PID: $SLAVE2_PID"
-echo
-echo "Logs:"
-echo "  $LOG_DIR/master.log"
-echo "  $LOG_DIR/slave1.log"
-echo "  $LOG_DIR/slave2.log"
-echo
-echo "Run the test script in another terminal:"
-echo "  cd $PROJECT_ROOT"
-echo "  ./scripts/test_requests.sh"
-echo
-echo "Press Ctrl+C here to stop all nodes."
+read_config_value() {
+    local key="$1"
+    local file="$2"
 
-wait
+    awk -F'=' -v wanted="$key" '
+        /^[[:space:]]*#/ { next }
+        $1 ~ "^[[:space:]]*" wanted "[[:space:]]*$" {
+            value = $2
+            sub(/[[:space:]]*#.*/, "", value)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            print value
+            exit
+        }
+    ' "$file"
+}
+
+check_tcp_port() {
+    local host="$1"
+    local port="$2"
+    local label="$3"
+
+    if ! timeout 2 bash -c "</dev/tcp/${host}/${port}" 2>/dev/null; then
+        echo "Error: $label is not reachable at ${host}:${port}." >&2
+        return 1
+    fi
+}
+
+[[ -f "$CONFIG_FILE" ]] || {
+    echo "Error: configuration file not found: $CONFIG_FILE" >&2
+    exit 1
+}
+
+CONFIG_FILE="$(realpath "$CONFIG_FILE")"
+DATABASE_VALUE="$(read_config_value DATABASE "$CONFIG_FILE")"
+
+if [[ -z "$DATABASE_VALUE" ]]; then
+    echo "Error: DATABASE is missing from $CONFIG_FILE" >&2
+    exit 1
+fi
+
+if [[ "$DATABASE_VALUE" = /* ]]; then
+    DB_FILE="$DATABASE_VALUE"
+else
+    DB_FILE="$PROJECT_ROOT/$NODE/$DATABASE_VALUE"
+fi
+
+case "$NODE" in
+    master)
+        CSV_FILE="$DATA_DIR/master_sensors.csv"
+        INIT_SCRIPT="$PROJECT_ROOT/master/master_init_db.sh"
+        ;;
+    slave1)
+        CSV_FILE="$DATA_DIR/slave1_sensors.csv"
+        INIT_SCRIPT="$PROJECT_ROOT/slave1/slave1_init_db.sh"
+        ;;
+    slave2)
+        CSV_FILE="$DATA_DIR/slave2_sensors.csv"
+        INIT_SCRIPT="$PROJECT_ROOT/slave2/slave2_init_db.sh"
+        ;;
+esac
+
+[[ -f "$CSV_FILE" ]] || {
+    echo "Error: CSV data file not found: $CSV_FILE" >&2
+    exit 1
+}
+
+echo "[1/4] Initializing $NODE database from $CSV_FILE"
+"$INIT_SCRIPT" "$DB_FILE" "$CSV_FILE"
+
+echo "[2/4] Compiling $NODE with Makefile"
+make -C "$PROJECT_ROOT/$NODE" clean
+make -C "$PROJECT_ROOT/$NODE"
+
+MEMCACHED_HOST="$(read_config_value MEMCACHED_HOST "$CONFIG_FILE")"
+MEMCACHED_PORT="$(read_config_value MEMCACHED_PORT "$CONFIG_FILE")"
+
+echo "[3/4] Checking local services"
+check_tcp_port "$MEMCACHED_HOST" "$MEMCACHED_PORT" "Memcached"
+
+if [[ "$NODE" == "master" ]]; then
+    MQTT_BROKER_HOST="$(read_config_value MQTT_BROKER_HOST "$CONFIG_FILE")"
+    MQTT_BROKER_PORT="$(read_config_value MQTT_BROKER_PORT "$CONFIG_FILE")"
+    check_tcp_port "$MQTT_BROKER_HOST" "$MQTT_BROKER_PORT" "MQTT Broker"
+fi
+
+echo "[4/4] Starting $NODE"
+echo "Press Ctrl+C to stop the program."
+cd "$PROJECT_ROOT/$NODE"
+exec "./$NODE" "$CONFIG_FILE"

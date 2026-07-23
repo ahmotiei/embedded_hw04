@@ -1,99 +1,63 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-MASTER_URL="http://192.168.122.22:8000/api/sensor"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG_FILE="${1:-$PROJECT_ROOT/master/config}"
+DATA_DIR="${DATA_DIR:-$PROJECT_ROOT/data}"
+OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_ROOT/test-output}"
+MASTER_HTTP_HOST="${MASTER_HTTP_HOST:-127.0.0.1}"
 
-OUTPUT="cache_speed_result.csv"
+# Reuse the safe configuration parser and dynamic sensor discovery.
+# shellcheck source=mqtt_common.sh
+source "$SCRIPT_DIR/mqtt_common.sh"
+mqtt_load_config "$CONFIG_FILE"
 
-
-SENSORS=(
-"temperature:101"
-"humidity:102"
-"motion:103"
-"temperature:104"
-
-"temperature:201"
-"humidity:202"
-"motion:203"
-"co2:204"
-
-"temperature:301"
-"humidity:302"
-"motion:303"
-"smoke:304"
-)
-
-
-echo "round,sensor_id,sensor_type,source,response_time_us" > $OUTPUT
-
-
-echo "=============================="
-echo "Round 1: Cache Miss Test"
-echo "=============================="
-
-
-
-for sensor in "${SENSORS[@]}"
-do
-
-    TYPE=${sensor%%:*}
-    ID=${sensor##*:}
-
-
-    RESPONSE=$(curl -s \
-    "$MASTER_URL?type=$TYPE&id=$ID")
-
-
-    SOURCE=$(echo $RESPONSE | \
-    python3 -c "import sys,json; print(json.load(sys.stdin)['source'])")
-
-
-    TIME=$(echo $RESPONSE | \
-    python3 -c "import sys,json; print(json.load(sys.stdin)['response_time_us'])")
-
-
-    echo "1,$ID,$TYPE,$SOURCE,$TIME" >> $OUTPUT
-
-
-    echo "Sensor $ID -> $SOURCE (${TIME} us)"
-
+for command_name in curl awk sed nc; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+        echo "Error: required command is not installed: $command_name" >&2
+        exit 1
+    }
 done
 
+shopt -s nullglob
+CSV_FILES=("$DATA_DIR"/*.csv)
+shopt -u nullglob
 
+if [[ "${#CSV_FILES[@]}" -eq 0 ]]; then
+    echo "Error: no CSV files found in $DATA_DIR" >&2
+    exit 1
+fi
 
-echo ""
-echo "=============================="
-echo "Round 2: Cache Hit Test"
-echo "=============================="
+mapfile -t SENSORS < <(mqtt_all_unique_sensors "${CSV_FILES[@]}")
+mkdir -p "$OUTPUT_DIR"
+OUTPUT="$OUTPUT_DIR/cache_speed_result.csv"
+MASTER_URL="http://${MASTER_HTTP_HOST}:${PORT}/api/sensor"
 
+mqtt_flush_master_cache
+printf '%s\n' 'round,sensor_id,sensor_type,source,response_time_us' > "$OUTPUT"
 
-for sensor in "${SENSORS[@]}"
-do
+for round in 1 2; do
+    echo "========== HTTP cache round $round =========="
 
-    TYPE=${sensor%%:*}
-    ID=${sensor##*:}
+    for sensor in "${SENSORS[@]}"; do
+        IFS=$'\t' read -r sensor_id sensor_type <<< "$sensor"
+        response="$(curl --fail --silent --show-error --max-time 5 \
+            "${MASTER_URL}?type=${sensor_type}&id=${sensor_id}")"
+        source_value="$(mqtt_extract_string "$response" source)"
+        time_value="$(mqtt_extract_integer "$response" response_time_us)"
 
+        if [[ -z "$source_value" || -z "$time_value" ]]; then
+            echo "Error: malformed HTTP response for sensor $sensor_id: $response" >&2
+            exit 1
+        fi
 
-    RESPONSE=$(curl -s \
-    "$MASTER_URL?type=$TYPE&id=$ID")
+        printf '%s,%s,%s,%s,%s\n' \
+            "$round" "$sensor_id" "$sensor_type" "$source_value" "$time_value" \
+            >> "$OUTPUT"
 
-
-    SOURCE=$(echo $RESPONSE | \
-    python3 -c "import sys,json; print(json.load(sys.stdin)['source'])")
-
-
-    TIME=$(echo $RESPONSE | \
-    python3 -c "import sys,json; print(json.load(sys.stdin)['response_time_us'])")
-
-
-    echo "2,$ID,$TYPE,$SOURCE,$TIME" >> $OUTPUT
-
-
-    echo "Sensor $ID -> $SOURCE (${TIME} us)"
-
+        echo "Sensor $sensor_id -> $source_value (${time_value} us)"
+    done
 done
 
-
-
-echo ""
-echo "Test completed."
 echo "Result saved in $OUTPUT"

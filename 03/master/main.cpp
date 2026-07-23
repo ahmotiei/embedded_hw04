@@ -161,10 +161,7 @@ bool parse_mqtt_version(
 
         if (
             parsed_characters != value.size() ||
-            (
-                parsed_version != 4 &&
-                parsed_version != 5
-            )
+            parsed_version != 4
         ) {
             return false;
         }
@@ -309,7 +306,7 @@ bool load_config(
                 )) {
                 std::cerr
                     << "Invalid MQTT_VERSION value. "
-                    << "Allowed values are 4 and 5.\n";
+                    << "This implementation uses MQTT 3.1.1 (value 4).\n";
 
                 return false;
             }
@@ -375,6 +372,11 @@ bool load_config(
         return false;
     }
 
+    if (config.slave_timeout_ms <= 0) {
+        std::cerr << "SLAVE_TIMEOUT_MS is missing\n";
+        return false;
+    }
+
     if (config.memcached_host.empty()) {
         std::cerr << "MEMCACHED_HOST is missing\n";
         return false;
@@ -412,6 +414,16 @@ bool load_config(
 
     if (config.mqtt_response_prefix.empty()) {
         std::cerr << "MQTT_RESPONSE_PREFIX is missing\n";
+        return false;
+    }
+
+    if (config.mqtt_qos < 0 || config.mqtt_qos > 2) {
+        std::cerr << "MQTT_QOS is missing or invalid\n";
+        return false;
+    }
+
+    if (config.mqtt_version != 4) {
+        std::cerr << "MQTT_VERSION=4 is required for MQTT 3.1.1\n";
         return false;
     }
 
@@ -1050,11 +1062,11 @@ int main(int argc, char *argv[]) {
         cache_error
     );
 
-    if(!mqtt_init())
-    {
+    if (!mqtt_init()) {
         std::cerr
-            <<
-            "MQTT initialization failed\n";
+            << "MQTT initialization failed; Master will not start\n";
+        cache_shutdown();
+        return EXIT_FAILURE;
     }
 
     if (!g_cache_available) {
@@ -1148,11 +1160,7 @@ int main(int argc, char *argv[]) {
 
     std::cout
         << "MQTT Version: "
-        << (
-            g_config.mqtt_version == 4
-                ? "3.1.1"
-                : "5"
-        )
+        << "3.1.1"
         << ", QoS: "
         << g_config.mqtt_qos
         << ", Keepalive: "

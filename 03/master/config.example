@@ -28,10 +28,10 @@ MQTT_CLIENT_ID=hotel-master
 MQTT_REQUEST_TOPIC=hotel/sensors/request
 MQTT_RESPONSE_PREFIX=hotel/sensors/response
 
-# MQTT 3.1.1 with QoS 1
+# MQTT 3.1.1 with QoS 1 (MQTT_VERSION=4)
 MQTT_QOS=1
 MQTT_VERSION=4
 MQTT_KEEPALIVE=30
 
-# Delay before reconnecting after a connection failure
+# Delay used by the manual reconnect loop after a connection loss
 MQTT_RECONNECT_MS=3000

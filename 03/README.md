@@ -99,12 +99,16 @@ Whenever data is obtained from SQLite or a Slave node, the Master stores the sen
 │   ├── init_all_databases.sh
 │   ├── check_databases.sh
 │   ├── test_requests.sh
+│   ├── mqtt_common.sh
 │   ├── mqtt_test.sh
 │   ├── mqtt_speed_test.sh
 │   ├── cache_speed_test.sh
 │   └── show_logs.sh
 │
+├── test-output/
+│   └── README.md
 ├── logs/
+├── CHANGELOG.md
 ├── README.md
 └── report.md
 ```
@@ -191,7 +195,8 @@ sudo apt install -y \
     libmemcached-dev \
     mosquitto \
     mosquitto-clients \
-    libpaho-mqtt-dev
+    libpaho-mqtt-dev \
+    netcat-openbsd
 ```
 
 ### 4.2 Slave Nodes
@@ -320,7 +325,9 @@ MQTT_KEEPALIVE=30
 MQTT_RECONNECT_MS=3000
 ```
 
-`MQTT_VERSION=4` means MQTT 3.1.1.
+`MQTT_VERSION=4` means MQTT 3.1.1. The Master applies this version explicitly through the Paho connection option `MQTTVERSION_3_1_1`.
+
+If the Broker connection is lost after startup, the Master retries after `MQTT_RECONNECT_MS` milliseconds and subscribes to the request topic again after reconnection. If the initial MQTT connection or subscription fails, the Master exits with an error instead of continuing without MQTT.
 
 The selected QoS is:
 
@@ -440,7 +447,7 @@ If `nc` is missing:
 sudo apt install netcat-openbsd
 ```
 
-Clearing the Master cache before Round 1 is required when the test must demonstrate a true cache miss.
+The corrected `mqtt_speed_test.sh` and `mqtt_test.sh` scripts clear the Master cache automatically before starting. The manual command remains useful for troubleshooting or independent tests.
 
 ---
 
@@ -536,12 +543,10 @@ cd ~/master
 Expected startup output includes:
 
 ```text
-MQTT callback registered
-MQTT subscribe topic: hotel/sensors/request rc=0
-MQTT connected
-Master running on port 8000
+MQTT connected and subscribed to hotel/sensors/request with QoS 1 using MQTT 3.1.1
+Master running on port 8000, database: master.db, cache: enabled
 MQTT Broker: 127.0.0.1:1883
-MQTT Version: 3.1.1, QoS: 1
+MQTT Version: 3.1.1, QoS: 1, Keepalive: 30 seconds
 ```
 
 The temporary `MQTT loop alive` debug message must not be present in the final version.
@@ -619,17 +624,19 @@ Cache-hit response:
 }
 ```
 
-Error response:
+Sensor-not-found response:
 
 ```json
 {
   "sensor_id": "999",
-  "source": "",
+  "source": "not_found",
   "success": false,
   "error": "sensor reading not found",
   "response_time_us": 2500
 }
 ```
+
+If the distributed lookup cannot be completed because of a database, network, or Slave communication failure, the response uses `"source":"error"` instead of reporting the sensor as missing.
 
 The `source` field can be:
 
@@ -639,7 +646,8 @@ The `source` field can be:
 | `master` | Returned from Master SQLite |
 | `slave1` | Found through Slave1 |
 | `slave2` | Found through Slave2 |
-| empty | Request failed or the sensor was not found |
+| `not_found` | The complete distributed lookup finished and the sensor was absent |
+| `error` | The distributed lookup could not be completed |
 
 ---
 
@@ -651,6 +659,7 @@ Run this command on the Master node, or from another machine that can reach the 
 mosquitto_pub \
     -h 127.0.0.1 \
     -p 1883 \
+    -V mqttv311 \
     -q 1 \
     -t "hotel/sensors/request" \
     -m '{"sensor_type":"temperature","sensor_id":"101"}'
@@ -662,6 +671,7 @@ From another machine, replace `127.0.0.1` with the Master IP:
 mosquitto_pub \
     -h 192.168.122.22 \
     -p 1883 \
+    -V mqttv311 \
     -q 1 \
     -t "hotel/sensors/request" \
     -m '{"sensor_type":"temperature","sensor_id":"101"}'
@@ -677,6 +687,7 @@ Subscribe to all response topics:
 mosquitto_sub \
     -h 127.0.0.1 \
     -p 1883 \
+    -V mqttv311 \
     -q 1 \
     -t "hotel/sensors/response/#" \
     -v
@@ -688,6 +699,7 @@ Subscribe only to sensor `101`:
 mosquitto_sub \
     -h 127.0.0.1 \
     -p 1883 \
+    -V mqttv311 \
     -q 1 \
     -t "hotel/sensors/response/101" \
     -v
@@ -738,7 +750,25 @@ Run:
 ./scripts/mqtt_test.sh
 ```
 
-This script is intended for a basic MQTT request/response verification.
+The script reads the Broker address, port, request topic, response prefix, MQTT version, QoS, Memcached address, and timeout from `master/config`. It does not contain a fixed list of test sensors. Instead, it dynamically selects one sensor from each of the Master, Slave1, and Slave2 CSV files.
+
+The functional test verifies all of the following cases:
+
+```text
+Master database lookup
+Slave1 distributed lookup
+Slave2 distributed lookup
+Repeated request served from Master cache
+Unknown sensor returns source=not_found
+```
+
+Before testing, the script flushes the Master cache. For every request, it subscribes only to the exact response topic of that sensor, applies MQTT 3.1.1 and the configured QoS, enforces a response timeout, and validates `success`, `sensor_id`, and `source`. The script exits with a nonzero status if any case fails.
+
+An alternative Master configuration file can be passed as the first argument:
+
+```bash
+./scripts/mqtt_test.sh /path/to/master/config
+```
 
 For manual testing, use three terminals:
 
@@ -753,6 +783,10 @@ Terminal 2 — Subscriber:
 
 ```bash
 mosquitto_sub \
+    -h 127.0.0.1 \
+    -p 1883 \
+    -V mqttv311 \
+    -q 1 \
     -t "hotel/sensors/response/#" \
     -v
 ```
@@ -761,6 +795,10 @@ Terminal 3 — Publisher:
 
 ```bash
 mosquitto_pub \
+    -h 127.0.0.1 \
+    -p 1883 \
+    -V mqttv311 \
+    -q 1 \
     -t "hotel/sensors/request" \
     -m '{"sensor_type":"temperature","sensor_id":"101"}'
 ```
@@ -775,27 +813,12 @@ The required benchmark script is:
 scripts/mqtt_speed_test.sh
 ```
 
-It sends requests for multiple sensors in two rounds.
-
-Tested sensors:
-
-| Sensor ID | Sensor type |
-|---:|---|
-| `101` | `temperature` |
-| `102` | `humidity` |
-| `103` | `motion` |
-| `104` | `temperature` |
+It dynamically discovers every unique `(sensor_id, sensor_type)` pair from all CSV files in `data/` and sends the same requests in two rounds. Therefore, sensors located on the Master, Slave1, and Slave2 are all included without hard-coding their IDs in the script.
 
 Make the script executable:
 
 ```bash
 chmod +x scripts/mqtt_speed_test.sh
-```
-
-Clear the Master cache before the benchmark:
-
-```bash
-printf "flush_all\r\nquit\r\n" | nc 127.0.0.1 11211
 ```
 
 Run the benchmark:
@@ -804,6 +827,14 @@ Run the benchmark:
 ./scripts/mqtt_speed_test.sh
 ```
 
+An alternative Master configuration file can be passed as the first argument:
+
+```bash
+./scripts/mqtt_speed_test.sh /path/to/master/config
+```
+
+The script flushes the Master cache automatically before Round 1. It applies MQTT 3.1.1 and the configured QoS to both `mosquitto_pub` and `mosquitto_sub`, subscribes to the exact response topic of each sensor, and uses a timeout so that a missing response cannot block the test indefinitely.
+
 The expected behavior is:
 
 ```text
@@ -811,53 +842,56 @@ Round 1: source = master, slave1, or slave2
 Round 2: source = cache
 ```
 
-Round 1 reads from SQLite or a Slave node and populates the Master cache. Round 2 repeats the same requests and should obtain the values from Memcached.
+Round 1 reads from SQLite or a Slave node and populates the Master cache. Round 2 repeats the same dynamically discovered sensors and requires every successful response to have `source=cache`.
+
+Two timing values are recorded for every request:
+
+| Field | Meaning |
+|---|---|
+| `service_time_us` | Internal distributed lookup time reported by the Master as `response_time_us` |
+| `round_trip_us` | End-to-end time from MQTT publish until the matching MQTT response is received |
+
+The script generates:
+
+```text
+test-output/mqtt_speed_results.csv
+test-output/mqtt_speed_summary.md
+```
+
+The CSV contains the result of every sensor in both rounds. The Markdown summary contains the average service time, average MQTT round-trip time, speedup ratio, and percentage reduction. The script exits with a nonzero status if a request fails, Round 1 unexpectedly uses cache, or Round 2 is not served from cache.
 
 ---
 
 ## 17. Measured Performance Results
 
-The following results were obtained from the completed multi-sensor MQTT benchmark.
+The corrected benchmark no longer keeps manually copied timing numbers in the README. This prevents the README, terminal screenshots, and report from containing results from different runs.
+
+After the final test, use the automatically generated files as the source of truth:
+
+```text
+test-output/mqtt_speed_results.csv
+test-output/mqtt_speed_summary.md
+```
 
 ### Round 1 — Cache Miss
 
-| Sensor ID | Type | Source | Response time |
-|---:|---|---|---:|
-| `101` | temperature | master | `1422 us` |
-| `102` | humidity | master | `1471 us` |
-| `103` | motion | master | `1137 us` |
-| `104` | temperature | master | `1161 us` |
-
-Average:
-
-```text
-(1422 + 1471 + 1137 + 1161) / 4 = 1297.75 us
-```
+Round 1 begins after the script successfully flushes the Master Memcached instance. Each successful response must come from `master`, `slave1`, or `slave2`. A Round 1 response with `source=cache` is treated as a validation failure.
 
 ### Round 2 — Cache Hit
 
-| Sensor ID | Type | Source | Response time |
-|---:|---|---|---:|
-| `101` | temperature | cache | `300 us` |
-| `102` | humidity | cache | `152 us` |
-| `103` | motion | cache | `199 us` |
-| `104` | temperature | cache | `193 us` |
-
-Average:
-
-```text
-(300 + 152 + 199 + 193) / 4 = 211 us
-```
+Round 2 repeats exactly the same sensor requests. Each successful response must have `source=cache`; otherwise, the script reports a failure.
 
 ### Comparison
 
+The generated summary contains the following comparison table with the real values from the latest execution:
+
 ```text
-1297.75 / 211 ≈ 6.15
+| Metric | Round 1 | Round 2 | Round 1 / Round 2 | Reduction |
+| Master service time | generated value | generated value | generated value | generated value |
+| MQTT end-to-end time | generated value | generated value | generated value | generated value |
 ```
 
-In this test, the cache-hit round was approximately `6.15` times faster on average than the cache-miss round.
-
-The comparison must use `response_time_us` from the Master response. Measuring the complete Bash process also includes subscriber startup, process scheduling, and MQTT client connection overhead, which can hide the real cache improvement.
+`Master service time` measures the lookup path inside the Master application. `MQTT end-to-end time` also includes MQTT client connection, Broker delivery, process scheduling, and response reception. Both values are retained because they describe different parts of the system performance.
 
 ---
 
@@ -875,15 +909,17 @@ Make it executable:
 chmod +x scripts/build_and_run.sh
 ```
 
-Run it from the `03/` directory:
+Run it from the `03/` directory in the VM corresponding to the node:
 
 ```bash
-./scripts/build_and_run.sh
+./scripts/build_and_run.sh master [config-file]
+./scripts/build_and_run.sh slave1 [config-file]
+./scripts/build_and_run.sh slave2 [config-file]
 ```
 
-Because the applications run on separate virtual machines, verify the hostnames, IP addresses, remote paths, and SSH connectivity expected by the script before execution.
+The script does not try to start all three applications on one machine and does not require SSH. For the selected node, it initializes the local database from the corresponding CSV file, compiles the program with its Makefile, checks the local Memcached service, checks the MQTT Broker when the selected node is `master`, and then starts the program in the foreground.
 
-Manual compilation and execution commands in this README can always be used when testing each node independently.
+Run the Slave1 command in the Slave1 VM, the Slave2 command in the Slave2 VM, and the Master command in the Master VM. The optional configuration path is useful when a file other than the default `master/config`, `slave1/config`, or `slave2/config` must be used.
 
 ---
 
@@ -894,11 +930,12 @@ Manual compilation and execution commands in this README can always be used when
 | `init_all_databases.sh` | Initializes Master and Slave databases from CSV data |
 | `check_databases.sh` | Verifies database files, tables, and sensor records |
 | `test_requests.sh` | Tests the HTTP request path |
-| `mqtt_test.sh` | Performs a basic MQTT request/response test |
-| `mqtt_speed_test.sh` | Runs the required two-round multi-sensor MQTT benchmark |
+| `mqtt_common.sh` | Provides shared configuration, timeout, publish/subscribe, cache flush, JSON extraction, and sensor-discovery functions for MQTT tests |
+| `mqtt_test.sh` | Validates Master, Slave1, Slave2, cache-hit, and unknown-sensor MQTT cases |
+| `mqtt_speed_test.sh` | Dynamically tests all CSV sensors in two rounds and generates CSV and Markdown results |
 | `cache_speed_test.sh` | Retains the Part 2 HTTP/cache benchmark |
 | `show_logs.sh` | Displays application logs |
-| `build_and_run.sh` | Compiles and starts the programs according to the project workflow |
+| `build_and_run.sh` | Initializes, compiles, validates services, and starts one selected node in its corresponding VM |
 
 ---
 
@@ -985,28 +1022,19 @@ sqlite3 ~/master/master.db ".tables"
 
 ### Round 1 unexpectedly returns `source=cache`
 
-Clear Memcached before running the benchmark:
+The corrected benchmark flushes the Master cache automatically and fails if Round 1 still returns `source=cache`. Verify that `MEMCACHED_HOST` and `MEMCACHED_PORT` in the selected Master configuration point to the same Memcached instance used by the running Master application.
+
+A manual flush can still be used for diagnosis:
 
 ```bash
 printf "flush_all\r\nquit\r\n" | nc 127.0.0.1 11211
 ```
 
-Also verify that `CACHE_TTL` has not retained values from a previous test.
+### `source=error` or MQTT response timeout
 
-### Empty source in benchmark output
+`source=error` means the distributed lookup could not be completed, for example because SQLite failed or a Slave was unreachable. `source=not_found` means all nodes were checked successfully and the sensor did not exist.
 
-The requested `(sensor_id, sensor_type)` pair may not exist. List valid Master sensors:
-
-```bash
-sqlite3 ~/master/master.db \
-"SELECT DISTINCT
-    s.sensor_id,
-    s.sensor_type,
-    s.sensor_name
- FROM sensor_readings AS r
- JOIN sensors AS s
-   ON r.sensor_id = s.sensor_id;"
-```
+A timeout means that the script did not receive a response on the exact sensor response topic within `RESPONSE_TIMEOUT_SECONDS`. Check the Broker, Master process, MQTT topics, MQTT version, QoS, and the Master-to-Slave network paths.
 
 ---
 
@@ -1036,27 +1064,3 @@ Recommended production improvements:
 - rate limiting and audit logging,
 - firewall rules that expose only required ports.
 
----
-
-## 22. Final Verification Checklist
-
-Before submitting Part 3, verify that:
-
-- [ ] Mosquitto is installed and running on the Master node.
-- [ ] Memcached is running on Master, Slave1, and Slave2.
-- [ ] All databases are initialized from CSV files.
-- [ ] Master and Slave programs compile using Makefiles.
-- [ ] `build_and_run.sh` exists and is executable.
-- [ ] Master connects to the MQTT Broker.
-- [ ] Master subscribes to `hotel/sensors/request`.
-- [ ] Requests can be sent using `mosquitto_pub`.
-- [ ] Responses can be received using `mosquitto_sub`.
-- [ ] Response topics follow `hotel/sensors/response/<sensor_id>`.
-- [ ] `mqtt_speed_test.sh` tests all required sensors in two rounds.
-- [ ] Round 1 uses SQLite or a Slave node.
-- [ ] Round 2 returns `source=cache`.
-- [ ] Response times are recorded and compared.
-- [ ] No IP address, port, or database path is hard-coded in C++ source files.
-- [ ] `README.md` and `report.md` are present.
-- [ ] The report contains an architecture or request-flow diagram.
-- [ ] Build artifacts and temporary files are removed before submission.
