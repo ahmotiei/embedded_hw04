@@ -144,19 +144,9 @@ bool publish_response(
         return false;
     }
 
-    const int completion_result = MQTTClient_waitForCompletion(
-        g_client,
-        token,
-        3000
-    );
+    // QoS 1 delivery is handled asynchronously by the Paho client.
+    // Blocking inside the message callback would delay later requests.
 
-    if (completion_result != MQTTCLIENT_SUCCESS) {
-        std::cerr
-            << "MQTT delivery confirmation failed: "
-            << MQTTClient_strerror(completion_result)
-            << " (rc=" << completion_result << ")\n";
-        return false;
-    }
 
     return true;
 }
